@@ -1,0 +1,2914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Froggy Up!</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+    <!-- ==================== AD SDK ====================
+         Adsgram SDK, два юнита из кабинета partner.adsgram.ai:
+         - Reward (UnitID 48755)     — revive / скин за рекламу / +10 монет
+         - Interstitial (UnitID int-48763) — межстраничная, раз в 2.5 мин,
+           показывается только по клику RESTART (см. блок "AD PLACEHOLDER").
+         ================================================== -->
+    <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        body {
+            background-color: #050811;
+            color: #ffffff;
+            font-family: 'Press Start 2P', monospace;
+            position: relative;
+            overflow: hidden;
+        }
+        #game-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 400px;
+            height: 600px;
+            transform-origin: center center;
+            /* transform (translate + scale) выставляется из JS в resizeGameToFitWindow() */
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.9), 0 0 25px rgba(34, 197, 94, 0.25);
+            border: 4px solid #0f2318;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            background: #0284c7;
+            touch-action: none;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 14px;
+            left: 75px;
+            right: 75px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #ffffff;
+            text-shadow: 2px 2px 0px #000, -1px -1px 0 #000;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* --- ГЛАВНОЕ МЕНЮ --- */
+        #main-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 50px 20px 60px 20px;
+            z-index: 30;
+            transition: opacity 0.4s ease;
+        }
+        #main-menu.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .menu-title {
+            font-size: 26px;
+            color: #4ade80;
+            text-shadow: 4px 4px 0 #052e16, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+            text-align: center;
+            animation: floatTitle 2.5s ease-in-out infinite;
+        }
+        @keyframes floatTitle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            align-items: center;
+            width: 100%;
+        }
+
+        .btn-lang {
+            background: #4f46e5;
+            box-shadow: 0 6px 0 #312e81, 0 8px 10px rgba(0,0,0,0.5);
+            font-size: 9px;
+            padding: 12px 20px;
+        }
+        .btn-lang:hover {
+            background: #6366f1;
+        }
+        .btn-lang:active {
+            box-shadow: 0 2px 0 #312e81;
+        }
+        .lang-btn-inner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .lang-flag-canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            width: 20px;
+            height: 14px;
+            border: 1px solid #050811;
+            flex-shrink: 0;
+        }
+        #lang-modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.75);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 60;
+        }
+        #lang-modal.active {
+            display: flex;
+        }
+        .lang-box {
+            background: #0f2318;
+            border: 3px solid #22c55e;
+            border-radius: 8px;
+            padding: 18px;
+            width: 300px;
+            max-width: 86%;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+        }
+        .lang-title {
+            font-size: 11px;
+            color: #4ade80;
+            text-align: center;
+            margin-bottom: 14px;
+            text-shadow: 2px 2px 0 #000;
+        }
+        .lang-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        .lang-option {
+            background: #14532d;
+            color: #fff;
+            border: 2px solid #052e16;
+            padding: 8px 6px;
+            font-size: 8px;
+            font-family: 'Press Start 2P', monospace;
+            cursor: pointer;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .lang-option .lang-flag-canvas {
+            width: 18px;
+            height: 12px;
+            flex-shrink: 0;
+        }
+        .lang-option:hover {
+            background: #16a34a;
+        }
+        .lang-option.active {
+            background: #4ade80;
+            color: #052e16;
+        }
+        .lang-close-btn {
+            width: 100%;
+            margin-top: 14px;
+            font-size: 10px;
+            padding: 10px;
+        }
+
+
+        .pixel-btn {
+            background: #22c55e;
+            color: #fff;
+            border: 3px solid #052e16;
+            padding: 14px 28px;
+            font-size: 12px;
+            font-family: 'Press Start 2P', monospace;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #14532d, 0 8px 10px rgba(0,0,0,0.5);
+            transition: transform 0.1s, background 0.2s, box-shadow 0.1s;
+            text-shadow: 2px 2px 0 #000;
+            width: 200px;
+            text-align: center;
+        }
+        .pixel-btn:hover {
+            background: #4ade80;
+        }
+        .pixel-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #14532d;
+        }
+
+        .btn-music {
+            background: #0284c7;
+            box-shadow: 0 6px 0 #0369a1, 0 8px 10px rgba(0,0,0,0.5);
+            font-size: 10px;
+            padding: 12px 20px;
+        }
+        .btn-music:hover {
+            background: #38bdf8;
+        }
+        .btn-music:active {
+            box-shadow: 0 2px 0 #0369a1;
+        }
+        .btn-music.off {
+            background: #64748b;
+            box-shadow: 0 6px 0 #334155, 0 8px 10px rgba(0,0,0,0.5);
+            color: #cbd5e1;
+        }
+
+        /* --- КНОПКА "ВОЗРОДИТЬСЯ ЗА РЕКЛАМУ" --- */
+        .btn-revive {
+            background: #f59e0b;
+            box-shadow: 0 6px 0 #92400e, 0 8px 10px rgba(0,0,0,0.5);
+            font-size: 9px;
+            padding: 12px 14px;
+            width: 220px;
+            margin-bottom: 14px;
+        }
+        .btn-revive:hover {
+            background: #fbbf24;
+        }
+        .btn-revive:active {
+            box-shadow: 0 2px 0 #92400e;
+        }
+        .btn-revive.hidden {
+            display: none;
+        }
+
+        /* --- КНОПКА "+10 МОНЕТ ЗА РЕКЛАМУ" В ПАУЗЕ --- */
+        .btn-pause-coin {
+            background: #f59e0b;
+            box-shadow: 0 6px 0 #92400e, 0 8px 10px rgba(0,0,0,0.5);
+            font-size: 9px;
+            padding: 12px 10px;
+            width: 100%;
+            margin-top: 14px;
+        }
+        .btn-pause-coin:hover {
+            background: #fbbf24;
+        }
+        .btn-pause-coin:active {
+            box-shadow: 0 2px 0 #92400e;
+        }
+        .btn-pause-coin.on-cooldown {
+            background: #64748b;
+            box-shadow: 0 6px 0 #334155, 0 8px 10px rgba(0,0,0,0.5);
+            color: #cbd5e1;
+            cursor: default;
+            font-size: 8px;
+        }
+        .btn-pause-coin.on-cooldown:active {
+            box-shadow: 0 6px 0 #334155, 0 8px 10px rgba(0,0,0,0.5);
+        }
+
+        /* --- КНОПКА "ПОЛУЧИТЬ СКИН ЗА РЕКЛАМУ" В МАГАЗИНЕ --- */
+        .skin-ad-unlock {
+            margin-top: 4px;
+            font-size: 6px;
+            padding: 3px 5px;
+            background: #f59e0b;
+            color: #451a03;
+            border: 1px solid #451a03;
+            text-align: center;
+            cursor: pointer;
+        }
+        .skin-ad-unlock:hover {
+            background: #fbbf24;
+        }
+
+        /* Экран Game Over */
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 30, 40, 0.92);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 20;
+        }
+        #game-over-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        h1 {
+            font-size: 22px;
+            color: #facc15;
+            text-shadow: 3px 3px 0 #713f12, -2px -2px 0 #000;
+            margin-bottom: 20px;
+            text-align: center;
+            line-height: 1.4;
+        }
+        p {
+            font-size: 11px;
+            margin-bottom: 28px;
+            color: #e0f2fe;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        /* --- МАГАЗИН --- */
+        #shop-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 10%, rgba(56, 189, 248, 0.25), transparent 45%),
+                radial-gradient(circle at 85% 85%, rgba(74, 222, 128, 0.18), transparent 40%),
+                linear-gradient(180deg, #0c4a6e 0%, #075985 35%, #0369a1 70%, #0c4a6e 100%);
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 40;
+        }
+        #shop-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #shop-screen::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image:
+                radial-gradient(ellipse 30px 10px at 15% 20%, rgba(74, 222, 128, 0.35), transparent 70%),
+                radial-gradient(ellipse 24px 8px at 80% 12%, rgba(74, 222, 128, 0.3), transparent 70%),
+                radial-gradient(ellipse 26px 9px at 60% 90%, rgba(74, 222, 128, 0.25), transparent 70%),
+                radial-gradient(ellipse 20px 7px at 10% 75%, rgba(125, 211, 252, 0.3), transparent 70%);
+            pointer-events: none;
+        }
+        .shop-header {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 12px;
+            background: #78350f;
+            border-bottom: 4px solid #451a03;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            z-index: 2;
+        }
+        .shop-back-btn {
+            background: #fde68a;
+            color: #451a03;
+            border: 3px solid #451a03;
+            width: 34px;
+            height: 34px;
+            font-size: 14px;
+            font-family: 'Press Start 2P', monospace;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #92400e;
+        }
+        .shop-back-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #92400e;
+        }
+        .shop-title {
+            font-size: 14px;
+            color: #fde68a;
+            text-shadow: 2px 2px 0 #451a03;
+        }
+        .shop-coins {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #fde68a;
+            border: 3px solid #451a03;
+            padding: 6px 10px;
+            font-size: 11px;
+            color: #451a03;
+        }
+        #shop-coin-icon {
+            image-rendering: pixelated;
+            width: 14px;
+            height: 14px;
+        }
+        .shop-grid {
+            position: relative;
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            padding: 14px;
+            overflow-y: auto;
+            z-index: 1;
+        }
+        .skin-card {
+            background: rgba(6, 78, 59, 0.55);
+            border: 3px solid #052e16;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 4px 6px 4px;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.15s;
+        }
+        .skin-card:hover {
+            transform: translateY(-2px);
+            background: rgba(6, 78, 59, 0.8);
+        }
+        .skin-card.equipped {
+            border-color: #4ade80;
+            background: rgba(34, 197, 94, 0.35);
+            box-shadow: 0 0 0 2px #4ade80, 0 0 12px rgba(74, 222, 128, 0.6);
+        }
+        .skin-card.locked {
+            opacity: 0.92;
+        }
+        .skin-card canvas {
+            image-rendering: pixelated;
+            width: 52px;
+            height: 52px;
+        }
+        .skin-name {
+            font-size: 7px;
+            color: #ecfdf5;
+            text-shadow: 1px 1px 0 #000;
+            margin-top: 4px;
+            text-align: center;
+        }
+        .skin-price {
+            margin-top: 4px;
+            font-size: 7px;
+            padding: 2px 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            border: 1px solid #451a03;
+            line-height: 1;
+        }
+        .skin-price.can-buy {
+            background: #fbbf24;
+            color: #451a03;
+        }
+        .skin-price.cant-buy {
+            background: #64748b;
+            color: #e2e8f0;
+        }
+        .skin-price.owned {
+            background: #4ade80;
+            color: #052e16;
+        }
+        .skin-price.selected-tag {
+            background: #22c55e;
+            color: #052e16;
+        }
+        .mini-coin-canvas {
+            image-rendering: pixelated;
+            width: 7px !important;
+            height: 7px !important;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+
+        /* --- ПОДТВЕРЖДЕНИЕ ПОКУПКИ --- */
+        #confirm-modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 20, 30, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 50;
+        }
+        #confirm-modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .confirm-box {
+            background: #0f766e;
+            border: 4px solid #052e16;
+            box-shadow: 0 8px 0 #052e16, 0 10px 16px rgba(0,0,0,0.5);
+            padding: 18px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 220px;
+        }
+        .confirm-preview {
+            image-rendering: pixelated;
+            width: 56px;
+            height: 56px;
+            margin-bottom: 8px;
+        }
+        .confirm-text {
+            font-size: 9px;
+            color: #ecfdf5;
+            text-align: center;
+            text-shadow: 1px 1px 0 #000;
+            line-height: 1.6;
+            margin-bottom: 14px;
+        }
+        .confirm-text .confirm-name {
+            color: #fde68a;
+        }
+        .confirm-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .confirm-btn {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            border: 3px solid #052e16;
+            padding: 8px 14px;
+            cursor: pointer;
+            text-shadow: 1px 1px 0 #000;
+        }
+        .confirm-yes {
+            background: #22c55e;
+            color: #fff;
+            box-shadow: 0 4px 0 #14532d;
+        }
+        .confirm-yes:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #14532d;
+        }
+        .confirm-no {
+            background: #ef4444;
+            color: #fff;
+            box-shadow: 0 4px 0 #7f1d1d;
+        }
+        .confirm-no:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #7f1d1d;
+        }
+
+        /* --- ПАУЗА --- */
+        #pause-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 20, 30, 0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 55;
+        }
+        #pause-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .pause-box {
+            background: #0c4a6e;
+            border: 4px solid #052e16;
+            box-shadow: 0 8px 0 #052e16, 0 10px 16px rgba(0,0,0,0.5);
+            padding: 20px 22px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 200px;
+        }
+        .pause-frog-canvas {
+            image-rendering: pixelated;
+            width: 64px;
+            height: 64px;
+            margin-bottom: 10px;
+        }
+        .pause-title {
+            font-size: 14px;
+            color: #4ade80;
+            text-shadow: 2px 2px 0 #000;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .pause-resume-btn {
+            width: 100%;
+            font-size: 10px;
+            padding: 12px;
+        }
+
+        /* --- ОБРАТНЫЙ ОТСЧЁТ --- */
+        #countdown-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 56;
+        }
+        #countdown-overlay.active {
+            opacity: 1;
+        }
+        .countdown-text {
+            font-size: 34px;
+            color: #fef08a;
+            text-shadow: 3px 3px 0 #000, -2px -2px 0 #052e16, 2px -2px 0 #052e16, -2px 2px 0 #052e16, 2px 2px 0 #052e16;
+            animation: countdownPulse 0.5s ease;
+        }
+        @keyframes countdownPulse {
+            0% { transform: scale(0.4); opacity: 0; }
+            60% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="ui-layer">
+        <span id="score-text">SCORE: 0</span>
+        <span id="high-score-text">BEST: 0</span>
+    </div>
+
+    <!-- ГЛАВНОЕ МЕНЮ -->
+    <div id="main-menu">
+        <h1 class="menu-title">Froggy Up!</h1>
+        <div class="menu-buttons">
+            <button id="play-btn" class="pixel-btn">PLAY</button>
+            <button id="lang-btn" class="pixel-btn btn-lang">
+                <span class="lang-btn-inner">
+                    <canvas id="lang-flag-icon" width="20" height="14" class="lang-flag-canvas"></canvas>
+                    <span id="lang-btn-text">Language: ENG</span>
+                </span>
+            </button>
+            <button id="music-btn" class="pixel-btn btn-music">Music: ON</button>
+        </div>
+    </div>
+
+    <!-- ВЫБОР ЯЗЫКА -->
+    <div id="lang-modal">
+        <div class="lang-box">
+            <div class="lang-title">LANGUAGE</div>
+            <div class="lang-grid" id="lang-grid"></div>
+            <button id="lang-close-btn" class="pixel-btn lang-close-btn">CLOSE</button>
+        </div>
+    </div>
+
+    <canvas id="canvas" width="400" height="600"></canvas>
+
+    <!-- ЭКРАН ПРОИГРЫША -->
+    <div id="game-over-screen">
+        <h1>SPLASH!<br>GAME OVER</h1>
+        <p id="final-score">SCORE: 0</p>
+        <button id="revive-btn" class="pixel-btn btn-revive">WATCH AD TO REVIVE <span id="revive-count">(0/3)</span></button>
+        <button id="restart-btn" class="pixel-btn">PLAY AGAIN</button>
+    </div>
+
+    <!-- МАГАЗИН СКИНОВ -->
+    <div id="shop-screen">
+        <div class="shop-header">
+            <button id="shop-back-btn" class="shop-back-btn">&#9664;</button>
+            <span class="shop-title">FROG SHOP</span>
+            <div class="shop-coins">
+                <canvas id="shop-coin-icon" width="20" height="20"></canvas>
+                <span id="shop-coins-text">0</span>
+            </div>
+        </div>
+        <div class="shop-grid" id="shop-grid"></div>
+
+        <!-- ПОДТВЕРЖДЕНИЕ ПОКУПКИ -->
+        <div id="confirm-modal">
+            <div class="confirm-box">
+                <canvas id="confirm-preview" class="confirm-preview" width="40" height="40"></canvas>
+                <div class="confirm-text"><span id="confirm-prefix">Buy skin</span><br><span class="confirm-name" id="confirm-name">RED</span><br><span id="confirm-for">for</span> <span id="confirm-price">50</span> <span id="confirm-tokens">tokens?</span></div>
+                <div class="confirm-buttons">
+                    <button id="confirm-yes-btn" class="confirm-btn confirm-yes">YES</button>
+                    <button id="confirm-no-btn" class="confirm-btn confirm-no">NO</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ПАУЗА -->
+    <div id="pause-overlay">
+        <div class="pause-box">
+            <canvas id="pause-frog-canvas" width="72" height="72" class="pause-frog-canvas"></canvas>
+            <div class="pause-title" id="pause-title">PAUSE</div>
+            <button id="pause-resume-btn" class="pixel-btn pause-resume-btn">RESUME</button>
+            <!-- БОНУС: +10 МОНЕТ ЗА РЕКЛАМУ (перезарядка 10 минут) -->
+            <button id="pause-coin-btn" class="pixel-btn btn-pause-coin">+10 COINS (AD)</button>
+        </div>
+    </div>
+
+    <!-- ОБРАТНЫЙ ОТСЧЁТ -->
+    <div id="countdown-overlay">
+        <div class="countdown-text" id="countdown-text">3</div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// ==================== АДАПТИВНОЕ МАСШТАБИРОВАНИЕ (Y8: "responsive in resizing") ====================
+// Вся игра (канвас 400x600 + все HTML-оверлеи поверх него: меню, магазин,
+// пауза и т.д.) верстается в фиксированной "логической" системе координат
+// 400x600 — как раньше. Чтобы игра корректно занимала весь доступный экран
+// в любом окне/фрейме (десктоп, мобильный, разные пропорции при ресайзе
+// плеера Y8), контейнер #game-container целиком масштабируется через
+// CSS transform: scale(), сохраняя пропорции 2:3 и не обрезаясь. Так как
+// внутри контейнера всё позиционируется в фиксированных пикселях
+// относительно тех же 400x600, масштаб применяется к контейнеру одним
+// множителем — переписывать вёрстку каждого элемента на проценты не нужно.
+const gameContainer = document.getElementById('game-container');
+const GAME_LOGICAL_WIDTH = 400;
+const GAME_LOGICAL_HEIGHT = 600;
+
+// window.innerWidth/innerHeight не всегда точны на мобильных (адресная
+// строка, свайп-жесты) — если браузер поддерживает visualViewport, он
+// точнее отражает реально видимую область.
+function getViewportSize() {
+    if (window.visualViewport) {
+        return { width: window.visualViewport.width, height: window.visualViewport.height };
+    }
+    return { width: window.innerWidth, height: window.innerHeight };
+}
+
+function resizeGameToFitWindow() {
+    const { width: availableWidth, height: availableHeight } = getViewportSize();
+    const scale = Math.min(
+        availableWidth / GAME_LOGICAL_WIDTH,
+        availableHeight / GAME_LOGICAL_HEIGHT
+    );
+    // translate(-50%, -50%) центрирует контейнер относительно top:50%/left:50%,
+    // scale() масштабирует — обе трансформации в одном свойстве, чтобы не
+    // зависеть от flex-центрирования body (в embed-iframe Y8 оно иногда
+    // рассинхронизируется и даёт визуальный сдвиг вниз/вбок).
+    gameContainer.style.transform = `translate(-50%, -50%) scale(${scale})`;
+}
+
+resizeGameToFitWindow();
+
+// Несколько независимых триггеров — событие 'resize' на window не всегда
+// надёжно долетает, когда игра встроена в iframe на стороне портала
+// (Y8 меняет размер именно iframe/плеера, а не самого window) или когда
+// меняется полноэкранный режим. Дублируем разными способами, чтобы
+// точно поймать любое изменение размера.
+window.addEventListener('resize', resizeGameToFitWindow);
+window.addEventListener('orientationchange', resizeGameToFitWindow);
+document.addEventListener('fullscreenchange', resizeGameToFitWindow);
+document.addEventListener('webkitfullscreenchange', resizeGameToFitWindow);
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resizeGameToFitWindow);
+}
+// ResizeObserver реагирует на реальное изменение размера видимой области
+// документа независимо от того, что его вызвало — самый надёжный способ
+// для нестандартных embed-сценариев на игровых порталах.
+if (window.ResizeObserver) {
+    new ResizeObserver(resizeGameToFitWindow).observe(document.documentElement);
+}
+// Финальная подстраховка: если вообще ни один из способов выше не
+// сработал в конкретном embed-окружении портала, раз в полсекунды
+// проверяем размер вручную и пересчитываем масштаб при расхождении.
+let lastViewportW = getViewportSize().width;
+let lastViewportH = getViewportSize().height;
+setInterval(() => {
+    const { width, height } = getViewportSize();
+    if (width !== lastViewportW || height !== lastViewportH) {
+        lastViewportW = width;
+        lastViewportH = height;
+        resizeGameToFitWindow();
+    }
+}, 500);
+// ==================== /АДАПТИВНОЕ МАСШТАБИРОВАНИЕ ====================
+
+
+const scoreEl = document.getElementById('score-text');
+const highScoreEl = document.getElementById('high-score-text');
+const gameOverScreen = document.getElementById('game-over-screen');
+const finalScoreEl = document.getElementById('final-score');
+const restartBtn = document.getElementById('restart-btn');
+const mainMenu = document.getElementById('main-menu');
+const playBtn = document.getElementById('play-btn');
+const musicBtn = document.getElementById('music-btn');
+const shopScreen = document.getElementById('shop-screen');
+const shopBackBtn = document.getElementById('shop-back-btn');
+const shopGrid = document.getElementById('shop-grid');
+const shopCoinsText = document.getElementById('shop-coins-text');
+const confirmModal = document.getElementById('confirm-modal');
+const confirmPreview = document.getElementById('confirm-preview');
+const confirmName = document.getElementById('confirm-name');
+const confirmPrice = document.getElementById('confirm-price');
+const confirmYesBtn = document.getElementById('confirm-yes-btn');
+const confirmNoBtn = document.getElementById('confirm-no-btn');
+const confirmPrefixEl = document.getElementById('confirm-prefix');
+const confirmForEl = document.getElementById('confirm-for');
+const confirmTokensEl = document.getElementById('confirm-tokens');
+const langBtn = document.getElementById('lang-btn');
+const langBtnText = document.getElementById('lang-btn-text');
+const langFlagIcon = document.getElementById('lang-flag-icon');
+const langModal = document.getElementById('lang-modal');
+const langGrid = document.getElementById('lang-grid');
+const langCloseBtn = document.getElementById('lang-close-btn');
+const pauseOverlay = document.getElementById('pause-overlay');
+const pauseFrogCanvas = document.getElementById('pause-frog-canvas');
+const pauseTitleEl = document.getElementById('pause-title');
+const pauseResumeBtn = document.getElementById('pause-resume-btn');
+const countdownOverlay = document.getElementById('countdown-overlay');
+const countdownTextEl = document.getElementById('countdown-text');
+const reviveBtn = document.getElementById('revive-btn');
+const reviveCountEl = document.getElementById('revive-count');
+const pauseCoinBtn = document.getElementById('pause-coin-btn');
+
+// --- ЛОКАЛИЗАЦИЯ ---
+const I18N = {
+    en: { label: 'ENG', play: 'PLAY', musicOn: 'Music: ON', musicOff: 'Music: OFF',
+        score: 'SCORE', best: 'BEST', pressSpace: 'PRESS SPACE TO START', tapToStart: 'TAP TO START',
+        buyPrefix: 'Buy skin', buyFor: 'for', buyTokens: 'tokens?', yes: 'YES', no: 'NO',
+        pause: 'PAUSE', resume: 'RESUME', jumpExclaim: 'JUMP!', watchAdSkin: 'Get free (Ad)',
+        skins: { default: 'DEFAULT', red: 'RED', orange: 'ORANGE', yellow: 'YELLOW', skyblue: 'SKY', blue: 'BLUE', purple: 'PURPLE', pink: 'PINK', brown: 'BROWN', white: 'WHITE', gray: 'GRAY', black: 'BLACK' } },
+    uk: { label: 'UKR', play: 'ГРАТИ', musicOn: 'Музика: УВІМК', musicOff: 'Музика: ВИМК',
+        score: 'РАХУНОК', best: 'РЕКОРД', pressSpace: 'НАТИСНІТЬ ПРОБІЛ', tapToStart: 'ТОРКНІТЬСЯ ЕКРАНА',
+        buyPrefix: 'Купити скін', buyFor: 'за', buyTokens: 'токенів?', yes: 'ТАК', no: 'НІ',
+        pause: 'ПАУЗА', resume: 'ПРОДОВЖИТИ', jumpExclaim: 'СТРИБОК!',
+        skins: { default: 'ЗВИЧАЙНИЙ', red: 'ЧЕРВОНИЙ', orange: 'ПОМАРАНЧЕВИЙ', yellow: 'ЖОВТИЙ', skyblue: 'НЕБЕСНИЙ', blue: 'СИНІЙ', purple: 'ФІОЛЕТОВИЙ', pink: 'РОЖЕВИЙ', brown: 'КОРИЧНЕВИЙ', white: 'БІЛИЙ', gray: 'СІРИЙ', black: 'ЧОРНИЙ' } },
+    ru: { label: 'RUS', play: 'ИГРАТЬ', musicOn: 'Музыка: ВКЛ', musicOff: 'Музыка: ВЫКЛ',
+        score: 'СЧЁТ', best: 'РЕКОРД', pressSpace: 'НАЖМИТЕ ПРОБЕЛ', tapToStart: 'ТАПНИТЕ ПО ЭКРАНУ',
+        buyPrefix: 'Купить скин', buyFor: 'за', buyTokens: 'токенов?', yes: 'ДА', no: 'НЕТ',
+        pause: 'ПАУЗА', resume: 'ПРОДОЛЖИТЬ', jumpExclaim: 'ПРЫГАЙ!',
+        skins: { default: 'ОБЫЧНЫЙ', red: 'КРАСНЫЙ', orange: 'ОРАНЖЕВЫЙ', yellow: 'ЖЁЛТЫЙ', skyblue: 'НЕБЕСНЫЙ', blue: 'СИНИЙ', purple: 'ФИОЛЕТОВЫЙ', pink: 'РОЗОВЫЙ', brown: 'КОРИЧНЕВЫЙ', white: 'БЕЛЫЙ', gray: 'СЕРЫЙ', black: 'ЧЁРНЫЙ' } },
+    de: { label: 'DEU', play: 'SPIELEN', musicOn: 'Musik: AN', musicOff: 'Musik: AUS',
+        score: 'PUNKTE', best: 'REKORD', pressSpace: 'LEERTASTE DRÜCKEN', tapToStart: 'TIPPEN ZUM STARTEN',
+        buyPrefix: 'Skin kaufen', buyFor: 'für', buyTokens: 'Token?', yes: 'JA', no: 'NEIN',
+        pause: 'PAUSE', resume: 'WEITER', jumpExclaim: 'SPRING!',
+        skins: { default: 'STANDARD', red: 'ROT', orange: 'ORANGE', yellow: 'GELB', skyblue: 'HIMMEL', blue: 'BLAU', purple: 'LILA', pink: 'PINK', brown: 'BRAUN', white: 'WEISS', gray: 'GRAU', black: 'SCHWARZ' } },
+    fr: { label: 'FRA', play: 'JOUER', musicOn: 'Musique: ON', musicOff: 'Musique: OFF',
+        score: 'SCORE', best: 'RECORD', pressSpace: 'APPUYEZ SUR ESPACE', tapToStart: 'TOUCHEZ POUR COMMENCER',
+        buyPrefix: 'Acheter le skin', buyFor: 'pour', buyTokens: 'jetons ?', yes: 'OUI', no: 'NON',
+        pause: 'PAUSE', resume: 'REPRENDRE', jumpExclaim: 'SAUTE !',
+        skins: { default: 'DÉFAUT', red: 'ROUGE', orange: 'ORANGE', yellow: 'JAUNE', skyblue: 'CIEL', blue: 'BLEU', purple: 'VIOLET', pink: 'ROSE', brown: 'MARRON', white: 'BLANC', gray: 'GRIS', black: 'NOIR' } },
+    es: { label: 'ESP', play: 'JUGAR', musicOn: 'Música: ON', musicOff: 'Música: OFF',
+        score: 'PUNTOS', best: 'RÉCORD', pressSpace: 'PULSA ESPACIO', tapToStart: 'TOCA PARA EMPEZAR',
+        buyPrefix: 'Comprar skin', buyFor: 'por', buyTokens: 'fichas?', yes: 'SÍ', no: 'NO',
+        pause: 'PAUSA', resume: 'CONTINUAR', jumpExclaim: '¡SALTA!',
+        skins: { default: 'PREDETERMINADO', red: 'ROJO', orange: 'NARANJA', yellow: 'AMARILLO', skyblue: 'CIELO', blue: 'AZUL', purple: 'MORADO', pink: 'ROSA', brown: 'MARRÓN', white: 'BLANCO', gray: 'GRIS', black: 'NEGRO' } },
+    it: { label: 'ITA', play: 'GIOCA', musicOn: 'Musica: ON', musicOff: 'Musica: OFF',
+        score: 'PUNTI', best: 'RECORD', pressSpace: 'PREMI SPAZIO', tapToStart: 'TOCCA PER INIZIARE',
+        buyPrefix: 'Compra skin', buyFor: 'per', buyTokens: 'gettoni?', yes: 'SÌ', no: 'NO',
+        pause: 'PAUSA', resume: 'CONTINUA', jumpExclaim: 'SALTA!',
+        skins: { default: 'PREDEFINITO', red: 'ROSSO', orange: 'ARANCIONE', yellow: 'GIALLO', skyblue: 'CIELO', blue: 'BLU', purple: 'VIOLA', pink: 'ROSA', brown: 'MARRONE', white: 'BIANCO', gray: 'GRIGIO', black: 'NERO' } },
+    pt: { label: 'POR', play: 'JOGAR', musicOn: 'Música: ON', musicOff: 'Música: OFF',
+        score: 'PONTOS', best: 'RECORDE', pressSpace: 'PRESSIONE ESPAÇO', tapToStart: 'TOQUE PARA COMEÇAR',
+        buyPrefix: 'Comprar skin', buyFor: 'por', buyTokens: 'fichas?', yes: 'SIM', no: 'NÃO',
+        pause: 'PAUSA', resume: 'CONTINUAR', jumpExclaim: 'SALTE!',
+        skins: { default: 'PADRÃO', red: 'VERMELHO', orange: 'LARANJA', yellow: 'AMARELO', skyblue: 'CÉU', blue: 'AZUL', purple: 'ROXO', pink: 'ROSA', brown: 'MARROM', white: 'BRANCO', gray: 'CINZA', black: 'PRETO' } },
+    nl: { label: 'NLD', play: 'SPELEN', musicOn: 'Muziek: AAN', musicOff: 'Muziek: UIT',
+        score: 'SCORE', best: 'RECORD', pressSpace: 'DRUK OP SPATIE', tapToStart: 'TIK OM TE STARTEN',
+        buyPrefix: 'Skin kopen', buyFor: 'voor', buyTokens: 'tokens?', yes: 'JA', no: 'NEE',
+        pause: 'PAUZE', resume: 'DOORGAAN', jumpExclaim: 'SPRING!',
+        skins: { default: 'STANDAARD', red: 'ROOD', orange: 'ORANJE', yellow: 'GEEL', skyblue: 'HEMEL', blue: 'BLAUW', purple: 'PAARS', pink: 'ROZE', brown: 'BRUIN', white: 'WIT', gray: 'GRIJS', black: 'ZWART' } },
+    zh: { label: 'CHN', play: '开始', musicOn: '音乐：开', musicOff: '音乐：关',
+        score: '得分', best: '最高分', pressSpace: '按空格键开始', tapToStart: '点击屏幕开始',
+        buyPrefix: '购买皮肤', buyFor: '花费', buyTokens: '代币？', yes: '是', no: '否',
+        pause: '暂停', resume: '继续', jumpExclaim: '跳！',
+        skins: { default: '默认', red: '红色', orange: '橙色', yellow: '黄色', skyblue: '天蓝色', blue: '蓝色', purple: '紫色', pink: '粉色', brown: '棕色', white: '白色', gray: '灰色', black: '黑色' } }
+};
+const LANG_NAMES = { en: 'English', uk: 'Українська', ru: 'Русский', de: 'Deutsch', fr: 'Français', es: 'Español', it: 'Italiano', pt: 'Português', nl: 'Nederlands', zh: '简体中文' };
+
+let currentLang = localStorage.getItem('frog_lang') || 'en';
+if (!I18N[currentLang]) currentLang = 'en';
+
+function t(key) {
+    return (I18N[currentLang] && I18N[currentLang][key] !== undefined) ? I18N[currentLang][key] : I18N.en[key];
+}
+function tSkinName(skinId) {
+    const dict = I18N[currentLang] && I18N[currentLang].skins ? I18N[currentLang].skins : I18N.en.skins;
+    return dict[skinId] || I18N.en.skins[skinId] || skinId.toUpperCase();
+}
+
+function drawSimpleStar(fctx, cx, cy, r, color) {
+    fctx.fillStyle = color;
+    fctx.beginPath();
+    fctx.moveTo(cx, cy - r);
+    fctx.lineTo(cx + r * 0.3, cy - r * 0.3);
+    fctx.lineTo(cx + r, cy);
+    fctx.lineTo(cx + r * 0.3, cy + r * 0.3);
+    fctx.lineTo(cx, cy + r);
+    fctx.lineTo(cx - r * 0.3, cy + r * 0.3);
+    fctx.lineTo(cx - r, cy);
+    fctx.lineTo(cx - r * 0.3, cy - r * 0.3);
+    fctx.closePath();
+    fctx.fill();
+}
+
+function drawFlagIcon(lang, targetCanvas) {
+    const canvasEl = targetCanvas || langFlagIcon;
+    const fctx = canvasEl.getContext('2d');
+    fctx.imageSmoothingEnabled = false;
+    const w = canvasEl.width, h = canvasEl.height;
+    fctx.clearRect(0, 0, w, h);
+    switch (lang) {
+        case 'en': // UK Union Jack (simplified)
+            fctx.fillStyle = '#0a17a3'; fctx.fillRect(0, 0, w, h);
+            fctx.strokeStyle = '#ffffff'; fctx.lineWidth = h * 0.32;
+            fctx.beginPath(); fctx.moveTo(0, 0); fctx.lineTo(w, h); fctx.stroke();
+            fctx.beginPath(); fctx.moveTo(w, 0); fctx.lineTo(0, h); fctx.stroke();
+            fctx.strokeStyle = '#c8102e'; fctx.lineWidth = h * 0.14;
+            fctx.beginPath(); fctx.moveTo(0, 0); fctx.lineTo(w, h); fctx.stroke();
+            fctx.beginPath(); fctx.moveTo(w, 0); fctx.lineTo(0, h); fctx.stroke();
+            fctx.fillStyle = '#ffffff';
+            fctx.fillRect(0, h / 2 - h * 0.22, w, h * 0.44);
+            fctx.fillRect(w / 2 - w * 0.16, 0, w * 0.32, h);
+            fctx.fillStyle = '#c8102e';
+            fctx.fillRect(0, h / 2 - h * 0.1, w, h * 0.2);
+            fctx.fillRect(w / 2 - w * 0.08, 0, w * 0.16, h);
+            break;
+        case 'uk': // Ukraine
+            fctx.fillStyle = '#0057b7'; fctx.fillRect(0, 0, w, h / 2);
+            fctx.fillStyle = '#ffd700'; fctx.fillRect(0, h / 2, w, h / 2);
+            break;
+        case 'ru': // Russia
+            fctx.fillStyle = '#ffffff'; fctx.fillRect(0, 0, w, h / 3);
+            fctx.fillStyle = '#0039a6'; fctx.fillRect(0, h / 3, w, h / 3);
+            fctx.fillStyle = '#d52b1e'; fctx.fillRect(0, 2 * h / 3, w, h / 3);
+            break;
+        case 'de': // Germany
+            fctx.fillStyle = '#000000'; fctx.fillRect(0, 0, w, h / 3);
+            fctx.fillStyle = '#dd0000'; fctx.fillRect(0, h / 3, w, h / 3);
+            fctx.fillStyle = '#ffce00'; fctx.fillRect(0, 2 * h / 3, w, h / 3);
+            break;
+        case 'fr': // France
+            fctx.fillStyle = '#0055a4'; fctx.fillRect(0, 0, w / 3, h);
+            fctx.fillStyle = '#ffffff'; fctx.fillRect(w / 3, 0, w / 3, h);
+            fctx.fillStyle = '#ef4135'; fctx.fillRect(2 * w / 3, 0, w / 3, h);
+            break;
+        case 'es': // Spain
+            fctx.fillStyle = '#aa151b'; fctx.fillRect(0, 0, w, h * 0.25);
+            fctx.fillStyle = '#f1bf00'; fctx.fillRect(0, h * 0.25, w, h * 0.5);
+            fctx.fillStyle = '#aa151b'; fctx.fillRect(0, h * 0.75, w, h * 0.25);
+            break;
+        case 'it': // Italy
+            fctx.fillStyle = '#009246'; fctx.fillRect(0, 0, w / 3, h);
+            fctx.fillStyle = '#ffffff'; fctx.fillRect(w / 3, 0, w / 3, h);
+            fctx.fillStyle = '#ce2b37'; fctx.fillRect(2 * w / 3, 0, w / 3, h);
+            break;
+        case 'pt': // Portugal (simplified)
+            fctx.fillStyle = '#006600'; fctx.fillRect(0, 0, w * 0.4, h);
+            fctx.fillStyle = '#ff0000'; fctx.fillRect(w * 0.4, 0, w * 0.6, h);
+            break;
+        case 'nl': // Netherlands
+            fctx.fillStyle = '#ae1c28'; fctx.fillRect(0, 0, w, h / 3);
+            fctx.fillStyle = '#ffffff'; fctx.fillRect(0, h / 3, w, h / 3);
+            fctx.fillStyle = '#21468b'; fctx.fillRect(0, 2 * h / 3, w, h / 3);
+            break;
+        case 'zh': // China (simplified)
+            fctx.fillStyle = '#de2910'; fctx.fillRect(0, 0, w, h);
+            drawSimpleStar(fctx, w * 0.24, h * 0.32, h * 0.26, '#ffde00');
+            break;
+        default:
+            fctx.fillStyle = '#334155'; fctx.fillRect(0, 0, w, h);
+    }
+    fctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    fctx.lineWidth = 1;
+    fctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+}
+
+function applyLanguage() {
+    langBtnText.innerText = 'Language: ' + I18N[currentLang].label;
+    drawFlagIcon(currentLang);
+    playBtn.innerText = t('play');
+    musicBtn.innerText = isMusicEnabled ? t('musicOn') : t('musicOff');
+    scoreEl.innerText = `${t('score')}: ${score}`;
+    highScoreEl.innerText = `${t('best')}: ${highScore}`;
+    finalScoreEl.innerText = `${t('score')}: ${score}`;
+    if (shopOpen) buildShopGrid();
+    if (pendingPurchaseSkin) {
+        confirmPrefixEl.innerText = t('buyPrefix');
+        confirmName.innerText = tSkinName(pendingPurchaseSkin.id);
+        confirmForEl.innerText = t('buyFor');
+        confirmTokensEl.innerText = t('buyTokens');
+        confirmYesBtn.innerText = t('yes');
+        confirmNoBtn.innerText = t('no');
+    }
+}
+
+
+function buildLangGrid() {
+    langGrid.innerHTML = '';
+    Object.keys(I18N).forEach(code => {
+        const opt = document.createElement('button');
+        opt.className = 'lang-option' + (code === currentLang ? ' active' : '');
+
+        const flagCanvas = document.createElement('canvas');
+        flagCanvas.width = 20;
+        flagCanvas.height = 14;
+        flagCanvas.className = 'lang-flag-canvas';
+        opt.appendChild(flagCanvas);
+
+        const label = document.createElement('span');
+        label.innerText = LANG_NAMES[code];
+        opt.appendChild(label);
+
+        opt.addEventListener('click', () => {
+            currentLang = code;
+            localStorage.setItem('frog_lang', code);
+            applyLanguage();
+            buildLangGrid();
+        });
+        langGrid.appendChild(opt);
+        drawFlagIcon(code, flagCanvas);
+    });
+}
+
+langBtn.addEventListener('click', () => {
+    buildLangGrid();
+    langModal.classList.add('active');
+});
+langCloseBtn.addEventListener('click', () => {
+    langModal.classList.remove('active');
+});
+
+const BANK_WIDTH = 65;
+
+let score = 0;
+let highScore = localStorage.getItem('frog_jump_high') || 0;
+let coins = parseInt(localStorage.getItem('frog_coins')) || 0;
+highScoreEl.innerText = `BEST: ${highScore}`;
+
+// --- СИСТЕМА СКИНОВ ---
+const FROG_SKINS = [
+    { id: 'default', name: 'DEFAULT', price: 0,  palette: { legs: '#1e5e27', bodyOuter: '#38b000', bodyInner: '#9ef01a', head: '#ccff33', spots: '#70e000' } },
+    { id: 'red',     name: 'RED',     price: 50, palette: { legs: '#7f1d1d', bodyOuter: '#dc2626', bodyInner: '#f87171', head: '#fecaca', spots: '#ef4444' } },
+    { id: 'orange',  name: 'ORANGE',  price: 50, palette: { legs: '#7c2d12', bodyOuter: '#ea580c', bodyInner: '#fb923c', head: '#fed7aa', spots: '#f97316' } },
+    { id: 'yellow',  name: 'YELLOW',  price: 50, palette: { legs: '#713f12', bodyOuter: '#eab308', bodyInner: '#fde047', head: '#fef9c3', spots: '#facc15' } },
+    { id: 'skyblue', name: 'SKY',     price: 50, palette: { legs: '#075985', bodyOuter: '#0ea5e9', bodyInner: '#7dd3fc', head: '#e0f2fe', spots: '#38bdf8' } },
+    { id: 'blue',    name: 'BLUE',    price: 50, palette: { legs: '#1e3a8a', bodyOuter: '#2563eb', bodyInner: '#60a5fa', head: '#dbeafe', spots: '#3b82f6' } },
+    { id: 'purple',  name: 'PURPLE',  price: 50, palette: { legs: '#4c1d95', bodyOuter: '#7c3aed', bodyInner: '#a78bfa', head: '#ede9fe', spots: '#8b5cf6' } },
+    { id: 'pink',    name: 'PINK',    price: 50, palette: { legs: '#831843', bodyOuter: '#db2777', bodyInner: '#f472b6', head: '#fce7f3', spots: '#ec4899' } },
+    { id: 'brown',   name: 'BROWN',   price: 50, palette: { legs: '#3b1d0a', bodyOuter: '#78350f', bodyInner: '#b45309', head: '#fcd34d', spots: '#d97706' } },
+    { id: 'white',   name: 'WHITE',   price: 50, palette: { legs: '#94a3b8', bodyOuter: '#cbd5e1', bodyInner: '#f1f5f9', head: '#ffffff', spots: '#e2e8f0' } },
+    { id: 'gray',    name: 'GRAY',    price: 50, palette: { legs: '#1f2937', bodyOuter: '#4b5563', bodyInner: '#9ca3af', head: '#e5e7eb', spots: '#6b7280' } },
+    { id: 'black',   name: 'BLACK',   price: 50, palette: { legs: '#09090b', bodyOuter: '#18181b', bodyInner: '#3f3f46', head: '#a1a1aa', spots: '#52525b' } }
+];
+
+let ownedSkins = JSON.parse(localStorage.getItem('frog_owned_skins') || '["default"]');
+if (!ownedSkins.includes('default')) ownedSkins.push('default');
+let equippedSkinId = localStorage.getItem('frog_equipped_skin') || 'default';
+if (!ownedSkins.includes(equippedSkinId)) equippedSkinId = 'default';
+let shopOpen = false;
+
+function getSkinById(id) {
+    return FROG_SKINS.find(s => s.id === id) || FROG_SKINS[0];
+}
+
+function getCurrentPalette() {
+    return getSkinById(equippedSkinId).palette;
+}
+
+function saveSkinState() {
+    localStorage.setItem('frog_owned_skins', JSON.stringify(ownedSkins));
+    localStorage.setItem('frog_equipped_skin', equippedSkinId);
+}
+
+function buildShopGrid() {
+    shopGrid.innerHTML = '';
+    FROG_SKINS.forEach(skin => {
+        const owned = ownedSkins.includes(skin.id);
+        const equipped = equippedSkinId === skin.id;
+
+        const card = document.createElement('div');
+        card.className = 'skin-card' + (equipped ? ' equipped' : '') + (!owned ? ' locked' : '');
+
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.width = 52;
+        previewCanvas.height = 52;
+        card.appendChild(previewCanvas);
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'skin-name';
+        nameEl.innerText = tSkinName(skin.id);
+        card.appendChild(nameEl);
+
+        const priceEl = document.createElement('div');
+        if (equipped) {
+            priceEl.className = 'skin-price selected-tag';
+            priceEl.innerText = 'EQUIPPED';
+        } else if (owned) {
+            priceEl.className = 'skin-price owned';
+            priceEl.innerText = 'SELECT';
+        } else {
+            const canBuy = coins >= skin.price;
+            priceEl.className = 'skin-price ' + (canBuy ? 'can-buy' : 'cant-buy');
+
+            const coinCanvas = document.createElement('canvas');
+            coinCanvas.width = 16;
+            coinCanvas.height = 16;
+            coinCanvas.className = 'mini-coin-canvas';
+            coinCanvas.style.width = '7px';
+            coinCanvas.style.height = '7px';
+            priceEl.appendChild(coinCanvas);
+
+            const priceText = document.createElement('span');
+            priceText.innerText = ' ' + skin.price;
+            priceEl.appendChild(priceText);
+
+            const cctx = coinCanvas.getContext('2d');
+            cctx.imageSmoothingEnabled = false;
+            drawFrogCoin(8, 8, 14, cctx);
+        }
+        card.appendChild(priceEl);
+
+        // Альтернативный способ получить скин бесплатно — за просмотр рекламы
+        if (!owned) {
+            const adUnlockEl = document.createElement('div');
+            adUnlockEl.className = 'skin-ad-unlock';
+            adUnlockEl.innerText = '\u25B6 ' + t('watchAdSkin');
+            adUnlockEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                watchAdForSkin(skin);
+            });
+            card.appendChild(adUnlockEl);
+        }
+
+        card.addEventListener('click', () => onSkinCardClick(skin));
+
+        shopGrid.appendChild(card);
+
+        const pctx = previewCanvas.getContext('2d');
+        pctx.imageSmoothingEnabled = false;
+        pctx.save();
+        const zoom = 1.5;
+        pctx.scale(zoom, zoom);
+        const availSize = 52 / zoom;
+        const fx = (availSize - frog.width) / 2;
+        const fy = (availSize - frog.height) / 2;
+        drawPixelArtFrog(fx, fy, 'right', 0, 0, false, pctx, skin.palette, true);
+        pctx.restore();
+    });
+
+    shopCoinsText.innerText = `${coins}`;
+    const headerCoinCanvas = document.getElementById('shop-coin-icon');
+    const hctx = headerCoinCanvas.getContext('2d');
+    hctx.imageSmoothingEnabled = false;
+    hctx.clearRect(0, 0, headerCoinCanvas.width, headerCoinCanvas.height);
+    drawFrogCoin(10, 10, 16, hctx);
+}
+
+let pendingPurchaseSkin = null;
+
+function onSkinCardClick(skin) {
+    const owned = ownedSkins.includes(skin.id);
+    if (owned) {
+        equippedSkinId = skin.id;
+        saveSkinState();
+        buildShopGrid();
+    } else if (coins >= skin.price) {
+        openConfirmModal(skin);
+    } else {
+        playBreakSound();
+    }
+}
+
+function openConfirmModal(skin) {
+    pendingPurchaseSkin = skin;
+    confirmPrefixEl.innerText = t('buyPrefix');
+    confirmName.innerText = tSkinName(skin.id);
+    confirmForEl.innerText = t('buyFor');
+    confirmPrice.innerText = skin.price;
+    confirmTokensEl.innerText = t('buyTokens');
+    confirmYesBtn.innerText = t('yes');
+    confirmNoBtn.innerText = t('no');
+
+    const pctx = confirmPreview.getContext('2d');
+    pctx.imageSmoothingEnabled = false;
+    pctx.clearRect(0, 0, confirmPreview.width, confirmPreview.height);
+    pctx.save();
+    const zoom = 1.1;
+    pctx.scale(zoom, zoom);
+    const availSize = 40 / zoom;
+    const fx = (availSize - frog.width) / 2;
+    const fy = (availSize - frog.height) / 2;
+    drawPixelArtFrog(fx, fy, 'right', 0, 0, false, pctx, skin.palette, true);
+    pctx.restore();
+
+    confirmModal.classList.add('active');
+}
+
+function closeConfirmModal() {
+    confirmModal.classList.remove('active');
+    pendingPurchaseSkin = null;
+}
+
+function confirmPurchase() {
+    const skin = pendingPurchaseSkin;
+    if (!skin) return;
+    if (coins >= skin.price && !ownedSkins.includes(skin.id)) {
+        coins -= skin.price;
+        localStorage.setItem('frog_coins', coins);
+        ownedSkins.push(skin.id);
+        equippedSkinId = skin.id;
+        saveSkinState();
+        playCoinSound();
+        buildShopGrid();
+    }
+    closeConfirmModal();
+}
+
+function openShop() {
+    shopOpen = true;
+    shopScreen.classList.add('active');
+    buildShopGrid();
+    // AFK-таймер: если игрок завис в магазине 2.5 минуты без выхода — реклама
+    if (shopAfkTimer) clearTimeout(shopAfkTimer);
+    shopAfkTimer = setTimeout(() => { tryShowInterstitialAd(); }, INTERSTITIAL_AD_COOLDOWN_MS);
+}
+
+function closeShop() {
+    shopOpen = false;
+    shopScreen.classList.remove('active');
+    closeConfirmModal();
+    if (shopAfkTimer) {
+        clearTimeout(shopAfkTimer);
+        shopAfkTimer = null;
+    }
+}
+
+let gameOver = false;
+let gameStarted = false;
+let isWaitingForSpace = false;
+let isMusicEnabled = true;
+let isPaused = false;
+let isCountingDown = false;
+let cameraY = 0;
+let keys = { left: false, right: false };
+
+// Определяем "мобильность" по основному типу указателя, а не просто по
+// наличию тача (у части ноутбуков есть тачскрин, но играют там всё
+// равно клавиатурой/мышью). pointer: coarse — палец на экране это
+// основной способ ввода, значит показываем "TAP TO START" вместо
+// "PRESS SPACE". На ПК (pointer: fine) остаётся как было — пробел.
+const isMobileDevice = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+let blinkTimer = 0;
+
+// Интервалы спавна
+let nextCoinScore = 500;
+let nextSpringScore = 800;
+let nextTrampolineScore = 2500;
+
+const exitBtnRect = { x: 10, y: 10, width: 44, height: 38 };
+const shopBtnRect = { x: canvas.width - 54, y: 10, width: 44, height: 40 };
+const pauseBtnRect = { x: canvas.width - 54, y: shopBtnRect.y + shopBtnRect.height + 8, width: 44, height: 40 };
+
+const frog = {
+    x: 186,
+    y: 484,
+    width: 28,
+    height: 26,
+    vx: 0,
+    vy: 0,
+    jumpForce: -10.5,
+    springForce: -16.5,
+    trampolineForce: -21.5,
+    gravity: 0.38,
+    speed: 0.6,
+    friction: 0.88,
+    facing: 'right',
+    squashTimer: 0,
+    currentScaleY: 1
+};
+
+let platforms = [];
+let particles = [];
+let fireflies = [];
+
+// --- 8-БИТНЫЙ АУДИО ДВИЖОК ---
+let audioCtx = null;
+let bgMusicInterval = null;
+let musicStep = 0;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    if (isMusicEnabled && !bgMusicInterval) {
+        startBgMusic();
+    }
+}
+
+function playJumpSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.15);
+
+    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+}
+
+function playSpringSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(280, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.28);
+
+    gain.gain.setValueAtTime(0.16, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.28);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.28);
+}
+
+function playTrampolineSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1400, audioCtx.currentTime + 0.38);
+
+    gain.gain.setValueAtTime(0.22, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.38);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.38);
+}
+
+function playCoinSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.12);
+
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.12);
+}
+
+function playBreakSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+}
+
+function playFallSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.4);
+
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.4);
+}
+
+function startBgMusic() {
+    if (bgMusicInterval) clearInterval(bgMusicInterval);
+    if (!isMusicEnabled) return;
+
+    const melody = [
+        261.63, 329.63, 392.00, 523.25,
+        293.66, 349.23, 440.00, 587.33,
+        329.63, 392.00, 493.88, 659.25,
+        349.23, 440.00, 523.25, 698.46
+    ];
+
+    bgMusicInterval = setInterval(() => {
+        if (!audioCtx || gameOver || !isMusicEnabled) return;
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        let freq = melody[musicStep % melody.length];
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+        gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.12);
+
+        musicStep++;
+    }, 140);
+}
+
+function stopBgMusic() {
+    if (bgMusicInterval) {
+        clearInterval(bgMusicInterval);
+        bgMusicInterval = null;
+    }
+}
+
+// ==================== AD PLACEHOLDER ====================
+// Adsgram Rewarded SDK подключён (см. <script src="sad.min.js"> в <head>).
+// AdController создаётся один раз через window.Adsgram.init({ blockId }),
+// а showAdPlaceholder() вызывает AdController.show() и решает
+// resolve/reject по тому, досмотрел ли игрок ролик до конца
+// (result.done). Вся остальная логика (кнопки, кулдауны, награды)
+// не тронута — она как была завязана на showAdPlaceholder(name).
+
+// TODO: если у тебя несколько разных рекламных юнитов (например, свой
+// blockId под ревард-скин и отдельный под ревард-жизнь), замени на
+// несколько AdController'ов и выбирай нужный внутри showAdPlaceholder(name).
+const ADSGRAM_BLOCK_ID = '48755';
+let AdController = null;
+try {
+    if (window.Adsgram) {
+        AdController = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
+    }
+} catch (e) {
+    console.warn('Adsgram init failed:', e);
+}
+
+// Отдельный блок под межстраничную (Interstitial) рекламу — другой
+// UnitID (int-48763) в кабинете Adsgram, отдельный AdController.
+// В отличие от ревард-рекламы, интерстишл не обязывает нас проверять,
+// досмотрел ли игрок ролик до конца — по формату его можно закрыть
+// раньше, и это не ошибка.
+const INTERSTITIAL_BLOCK_ID = 'int-48763';
+let InterstitialAdController = null;
+try {
+    if (window.Adsgram) {
+        InterstitialAdController = window.Adsgram.init({ blockId: INTERSTITIAL_BLOCK_ID });
+    }
+} catch (e) {
+    console.warn('Adsgram interstitial init failed:', e);
+}
+
+let wasMusicPlayingBeforeAd = false;
+
+// Отдельный флаг "идёт показ рекламы" — НЕ путать с isPaused (меню паузы).
+// adPlaying блокирует физику и ввод сам по себе, не трогая
+// isPaused/shopOpen, так что после рекламы игра возвращается ровно
+// в то состояние, в котором была до её показа.
+let adPlaying = false;
+
+function pauseForAd() {
+    wasMusicPlayingBeforeAd = !!bgMusicInterval;
+    stopBgMusic();
+    // suspend() глушит ВЕСЬ звук из AudioContext разом — и музыку,
+    // и любые звуковые эффекты (прыжок, монетка и т.д.), которые могли
+    // сработать прямо в момент показа рекламы.
+    if (audioCtx && audioCtx.state === 'running') {
+        audioCtx.suspend();
+    }
+    adPlaying = true;
+}
+function resumeFromAd() {
+    adPlaying = false;
+    // Рекламные SDK обычно показывают ролик в iframe и забирают фокус
+    // клавиатуры себе. Если после его закрытия не вернуть фокус странице,
+    // клавиши стрелок/A-D перестают долетать до
+    // window.addEventListener('keydown', ...), и управление "оживает"
+    // только после клика по экрану.
+    window.focus();
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    if (wasMusicPlayingBeforeAd && isMusicEnabled) startBgMusic();
+}
+
+// Показ реального ревард-ролика через Adsgram. resolve() только если
+// пользователь досмотрел рекламу до конца (result.done === true) —
+// именно так вызовы ниже (revive/skin/coins) решают, выдавать награду
+// или нет. Если SDK не инициализировался (например, открыли файл не
+// внутри Telegram mini app) — reject сразу, награду не даём.
+function showAdPlaceholder(name) {
+    return new Promise((resolve, reject) => {
+        if (!AdController) {
+            console.warn('Adsgram AdController не инициализирован, показ рекламы недоступен:', name);
+            reject(false);
+            return;
+        }
+        pauseForAd();
+        AdController.show().then((result) => {
+            resumeFromAd();
+            if (result && result.done) {
+                resolve(true);
+            } else {
+                reject(false);
+            }
+        }).catch((result) => {
+            resumeFromAd();
+            reject(result);
+        });
+    });
+}
+
+// Показ интерстишл-ролика. В отличие от ревард-рекламы её можно
+// закрыть раньше — это нормальный исход, а не "отказ", поэтому здесь
+// нет reject по недосмотру: resolve() вызывается в любом случае после
+// закрытия/окончания ролика (или сразу, если реклама недоступна), а
+// вызывающий код просто продолжает своё дело (например, рестарт игры).
+function showInterstitialAd(name) {
+    return new Promise((resolve) => {
+        if (!InterstitialAdController) {
+            console.warn('Adsgram InterstitialAdController не инициализирован, показ рекламы недоступен:', name);
+            resolve(false);
+            return;
+        }
+        pauseForAd();
+        InterstitialAdController.show().then(() => {
+            resumeFromAd();
+            resolve(true);
+        }).catch(() => {
+            resumeFromAd();
+            resolve(false);
+        });
+    });
+}
+
+// --- 1) INTERSTITIAL: не чаще, чем раз в 2.5 минуты, и строго не во
+// время прыжков/полёта — реклама может сработать только в двух
+// "спокойных" точках: по клику на кнопку RESTART на экране смерти,
+// либо если игрок завис в магазине без действий 2.5 минуты (AFK).
+//
+// Важно: кулдаун проверяется именно в момент клика/срабатывания
+// AFK-таймера, а НЕ в момент смерти. Если игрок погиб на 2:31, но
+// кулдаун истёк ещё на 2:30 — реклама не выскакивает сама по себе
+// сразу после смерти; она покажется только когда он реально нажмёт
+// RESTART (см. restartBtn.addEventListener ниже). Если игрок жмёт
+// RESTART раньше, чем истекли 2.5 минуты — рестарт происходит сразу,
+// без рекламы.
+const INTERSTITIAL_AD_COOLDOWN_MS = 2.5 * 60 * 1000;
+let lastInterstitialAdTime = Date.now();
+let interstitialAdInFlight = false;
+let shopAfkTimer = null;
+
+// onDone вызывается всегда: сразу — если кулдаун ещё не истёк (реклама
+// не показывается вовсе), либо после того, как ролик закрылся/закончился.
+function tryShowInterstitialAd(onDone) {
+    const now = Date.now();
+    if (interstitialAdInFlight || now - lastInterstitialAdTime < INTERSTITIAL_AD_COOLDOWN_MS) {
+        if (typeof onDone === 'function') onDone();
+        return;
+    }
+    interstitialAdInFlight = true;
+    lastInterstitialAdTime = now;
+    showInterstitialAd('interstitial-ad').then(() => {
+        interstitialAdInFlight = false;
+        if (typeof onDone === 'function') onDone();
+    });
+}
+
+// --- 2) REWARDED: возрождение на экране смерти (максимум 3 раза за забег) ---
+const MAX_REVIVES_PER_RUN = 3;
+let reviveCount = 0;
+
+function updateReviveButtonUI() {
+    if (reviveCount >= MAX_REVIVES_PER_RUN) {
+        reviveBtn.classList.add('hidden');
+    } else {
+        reviveBtn.classList.remove('hidden');
+        reviveCountEl.innerText = `(${reviveCount}/${MAX_REVIVES_PER_RUN})`;
+    }
+}
+
+function doRevive() {
+    reviveCount++;
+    gameOver = false;
+    gameOverScreen.classList.remove('active');
+
+    // Возрождаем жабку на самой верхней из уцелевших платформ
+    let topPad = platforms[0];
+    platforms.forEach(p => { if (p.y < topPad.y) topPad = p; });
+    frog.x = topPad.x + topPad.width / 2 - frog.width / 2;
+    frog.y = topPad.y - frog.height - 2;
+    frog.vy = frog.jumpForce;
+    frog.vx = 0;
+    frog.squashTimer = 6;
+
+    updateReviveButtonUI();
+
+    // "3... 2... 1... JUMP!" перед тем как отпустить физику — та же
+    // анимация, что и при снятии с паузы (см. runCountdownAnimation()),
+    // чтобы игрок не падал/не прыгал вслепую в первую же секунду после
+    // рекламного ролика.
+    runCountdownAnimation(() => {});
+}
+
+reviveBtn.addEventListener('click', () => {
+    showAdPlaceholder('revive-ad').then(() => {
+        // Реклама досмотрена полностью — выдаём награду
+        doRevive();
+    }).catch(() => {
+        // Реклама пропущена/недоступна — награду не даём
+    });
+});
+
+// --- 3) REWARDED: получить скин бесплатно за рекламу (альтернатива монетам) ---
+function watchAdForSkin(skin) {
+    showAdPlaceholder('skin-unlock-ad').then(() => {
+        if (!ownedSkins.includes(skin.id)) ownedSkins.push(skin.id);
+        equippedSkinId = skin.id;
+        saveSkinState();
+        playCoinSound();
+        buildShopGrid();
+    }).catch(() => {
+        // Реклама пропущена/недоступна — скин не выдаём
+    });
+}
+
+// --- 4) REWARDED: +10 монет за рекламу в меню паузы (перезарядка 10 минут) ---
+const PAUSE_COIN_REWARD = 10;
+const PAUSE_COIN_AD_COOLDOWN_MS = 10 * 60 * 1000;
+let lastPauseCoinAdTime = 0;
+let pauseCoinTimerInterval = null;
+
+function updatePauseCoinBtn() {
+    const remaining = PAUSE_COIN_AD_COOLDOWN_MS - (Date.now() - lastPauseCoinAdTime);
+    if (remaining <= 0) {
+        pauseCoinBtn.disabled = false;
+        pauseCoinBtn.classList.remove('on-cooldown');
+        pauseCoinBtn.innerText = `+${PAUSE_COIN_REWARD} COINS (AD)`;
+    } else {
+        pauseCoinBtn.disabled = true;
+        pauseCoinBtn.classList.add('on-cooldown');
+        const totalSec = Math.ceil(remaining / 1000);
+        const mm = Math.floor(totalSec / 60);
+        const ss = totalSec % 60;
+        pauseCoinBtn.innerText = `AVAILABLE IN ${mm}:${ss.toString().padStart(2, '0')}`;
+    }
+}
+
+pauseCoinBtn.addEventListener('click', () => {
+    if (Date.now() - lastPauseCoinAdTime < PAUSE_COIN_AD_COOLDOWN_MS) return;
+    showAdPlaceholder('pause-coin-ad').then(() => {
+        coins += PAUSE_COIN_REWARD;
+        localStorage.setItem('frog_coins', coins);
+        lastPauseCoinAdTime = Date.now();
+        playCoinSound();
+        updatePauseCoinBtn();
+    }).catch(() => {
+        // Реклама пропущена/недоступна — монеты не начисляем
+    });
+});
+
+// ==================== /AD PLACEHOLDER ====================
+
+function pseudoRandom(seed) {
+    let x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+}
+
+function initFireflies() {
+    fireflies = [];
+    for (let i = 0; i < 10; i++) {
+        fireflies.push({
+            x: Math.random() < 0.5 ? Math.random() * (BANK_WIDTH - 15) : canvas.width - BANK_WIDTH + Math.random() * (BANK_WIDTH - 15),
+            y: Math.random() * canvas.height,
+            size: Math.random() * 2 + 1,
+            speedX: (Math.random() - 0.5) * 0.4,
+            speedY: (Math.random() - 0.5) * 0.4,
+            pulse: Math.random() * Math.PI * 2
+        });
+    }
+}
+
+function drawFrogCoin(cx, cy, size = 14, targetCtx = ctx) {
+    const c = targetCtx;
+    c.save();
+    c.translate(cx, cy);
+
+    const r = size / 2;
+
+    c.fillStyle = '#b45309';
+    c.fillRect(-r, -r, size, size);
+
+    c.fillStyle = '#fbbf24';
+    c.fillRect(-r + 1, -r + 1, size - 2, size - 2);
+
+    c.fillStyle = '#fef08a';
+    c.fillRect(-r + 2, -r + 2, size/4, size/4);
+
+    c.fillStyle = '#15803d';
+    c.fillRect(-r + size/5, -r + size/3, size - (size/5)*2, size - (size/3)*2);
+
+    c.fillStyle = '#ffffff';
+    c.fillRect(-r + size/4, -r + size/4, size/6, size/6);
+    c.fillRect(r - size/3, -r + size/4, size/6, size/6);
+
+    c.fillStyle = '#000';
+    c.fillRect(-r + size/4, -r + size/4, 1, 1);
+    c.fillRect(r - size/3, -r + size/4, 1, 1);
+
+    c.restore();
+}
+
+// Мухоморовая пружина (26x16px)
+function drawPixelAmanitaSpring(x, y, isCompressed) {
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+
+    if (isCompressed) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(2, 13, 22, 3);
+
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(4, 10, 18, 3);
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(6, 11, 14, 1);
+
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(1, 8, 24, 3);
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(2, 5, 22, 4);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(4, 6, 4, 2);
+        ctx.fillRect(11, 5, 4, 2);
+        ctx.fillRect(18, 6, 4, 2);
+    } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(2, 14, 22, 2);
+
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(5, 7, 16, 7);
+
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(6, 7, 14, 2);
+        ctx.fillRect(6, 10, 14, 2);
+        ctx.fillRect(6, 13, 14, 1);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(8, 7, 4, 1);
+        ctx.fillRect(8, 10, 4, 1);
+
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(0, 6, 26, 2);
+
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(1, 2, 24, 5);
+        ctx.fillRect(3, 0, 20, 2);
+
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(4, 1, 6, 2);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(4, 3, 4, 2);
+        ctx.fillRect(11, 1, 4, 2);
+        ctx.fillRect(18, 3, 4, 2);
+    }
+
+    ctx.restore();
+}
+
+// --- ПИКСЕЛЬ-АРТ ЛОТОС-БАТУТ (34x18px) ---
+function drawPixelLotusTrampoline(x, y, isCompressed) {
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+
+    // Тень под лотосом
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(3, 15, 28, 3);
+
+    // Защитный кувшинковый лист-основание
+    ctx.fillStyle = '#047857';
+    ctx.fillRect(2, 13, 30, 4);
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(4, 14, 26, 2);
+
+    if (isCompressed) {
+        // --- СЖАТЫЙ СОСТОЯНИЕ (ПРИЗЕМЛЕНИЕ) ---
+        // Зелёный упругий стебель-пружина
+        ctx.fillStyle = '#065f46';
+        ctx.fillRect(14, 11, 6, 3);
+        ctx.fillStyle = '#34d399';
+        ctx.fillRect(16, 11, 2, 3);
+
+        // Внешние розовые лепестки (согнутые книзу)
+        ctx.fillStyle = '#9d174d';
+        ctx.fillRect(1, 10, 32, 4);
+        ctx.fillStyle = '#be185d';
+        ctx.fillRect(3, 8, 28, 4);
+        ctx.fillStyle = '#f43f5e';
+        ctx.fillRect(5, 7, 24, 3);
+
+        // Яркая пружинистая золотая пыльца (сжата)
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(9, 8, 16, 2);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(12, 8, 10, 1);
+
+    } else {
+        // --- ОБЫЧНОЕ СОСТОЯНИЕ (ПОКОЙ И СВЕЧЕНИЕ) ---
+        // Зелёный пружинный стебель
+        ctx.fillStyle = '#065f46';
+        ctx.fillRect(13, 10, 8, 4);
+        ctx.fillStyle = '#34d399';
+        ctx.fillRect(15, 10, 4, 4);
+
+        // Нижний слой лепестков (тёмно-розовый контур)
+        ctx.fillStyle = '#831843';
+        ctx.fillRect(0, 6, 34, 6);
+        ctx.fillRect(3, 3, 28, 4);
+
+        // Основной насыщенный розовый бутон
+        ctx.fillStyle = '#db2777';
+        ctx.fillRect(2, 5, 30, 6);
+        ctx.fillRect(5, 2, 24, 4);
+
+        // Светлые блики на кончиках лепестков
+        ctx.fillStyle = '#f472b6';
+        ctx.fillRect(1, 5, 3, 4);
+        ctx.fillRect(30, 5, 3, 4);
+        ctx.fillRect(6, 1, 4, 3);
+        ctx.fillRect(24, 1, 4, 3);
+        ctx.fillRect(13, 0, 8, 2);
+
+        // ПЫЛЬЦА / СЕРДЦЕВИНА БАТУТА (Энергетическая золотая площадка)
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(8, 4, 18, 4);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(10, 3, 14, 4);
+        
+        // Переливающийся блик на пыльце (сигнал игроку прыгать сюда)
+        const glow = Math.sin(Date.now() * 0.01) > 0 ? '#ffffff' : '#fef08a';
+        ctx.fillStyle = glow;
+        ctx.fillRect(12, 4, 10, 2);
+    }
+
+    ctx.restore();
+}
+
+function drawPixelArtFrog(x, y, facing, vy, squashTimer, isIdle = false, targetCtx = ctx, palette = null, staticPose = false) {
+    const c = targetCtx;
+    const pal = palette || getCurrentPalette();
+    c.save();
+
+    let scaleY, scaleX;
+    if (staticPose) {
+        scaleY = 1;
+        scaleX = 1;
+    } else {
+        let targetScaleY = 1;
+        if (squashTimer > 0) {
+            targetScaleY = 0.8;
+        } else if (vy < -3) {
+            targetScaleY = 1.15;
+        } else if (vy > 3) {
+            targetScaleY = 0.92;
+        } else if (isIdle || isWaitingForSpace) {
+            targetScaleY = 1 + Math.sin(Date.now() * 0.004) * 0.05;
+        }
+
+        frog.currentScaleY += (targetScaleY - frog.currentScaleY) * 0.25;
+        scaleY = frog.currentScaleY;
+        scaleX = 1 / scaleY;
+    }
+
+    const centerX = Math.round(x) + frog.width / 2;
+    const bottomY = Math.round(y) + frog.height;
+
+    c.translate(centerX, bottomY);
+
+    if (facing === 'left') {
+        c.scale(-scaleX, scaleY);
+    } else {
+        c.scale(scaleX, scaleY);
+    }
+
+    const drawX = -frog.width / 2;
+    const drawY = -frog.height;
+
+    c.fillStyle = 'rgba(0, 20, 10, 0.3)';
+    c.fillRect(drawX + 2, drawY + frog.height - 2, 24, 2);
+
+    let legOffset = (!staticPose && vy < 0 && !isIdle) ? -1 : 0;
+    c.fillStyle = pal.legs;
+    c.fillRect(drawX, drawY + 14 + legOffset, 8, 10);
+    c.fillRect(drawX + 20, drawY + 14 + legOffset, 8, 10);
+
+    c.fillStyle = pal.bodyOuter;
+    c.fillRect(drawX + 4, drawY + 4, 20, 18);
+    c.fillRect(drawX + 2, drawY + 8, 24, 12);
+
+    c.fillStyle = pal.bodyInner;
+    c.fillRect(drawX + 8, drawY + 10, 12, 10);
+
+    c.fillStyle = pal.head;
+    c.fillRect(drawX + 4, drawY, 8, 6);
+    c.fillRect(drawX + 16, drawY, 8, 6);
+
+    let isBlinking = false;
+    if (!staticPose) {
+        blinkTimer++;
+        isBlinking = isIdle && (blinkTimer % 180 > 170);
+    }
+
+    if (!isBlinking) {
+        let eyeY = (!staticPose && vy < -2 && !isIdle) ? -1 : ((!staticPose && vy > 2 && !isIdle) ? 1 : 0);
+        c.fillStyle = '#000000';
+        c.fillRect(drawX + 8, drawY + 2 + eyeY, 3, 3);
+        c.fillRect(drawX + 17, drawY + 2 + eyeY, 3, 3);
+    } else {
+        c.fillStyle = pal.legs;
+        c.fillRect(drawX + 7, drawY + 3, 5, 2);
+        c.fillRect(drawX + 16, drawY + 3, 5, 2);
+    }
+
+    c.fillStyle = pal.spots;
+    c.fillRect(drawX + 6, drawY + 12, 2, 2);
+    c.fillRect(drawX + 20, drawY + 12, 2, 2);
+
+    c.restore();
+}
+
+function drawPixelPad(pad) {
+    const rx = Math.round(pad.x);
+    const ry = Math.round(pad.y - cameraY);
+
+    if (pad.broken) return;
+
+    ctx.fillStyle = 'rgba(0, 15, 30, 0.4)';
+    ctx.fillRect(rx + 2, ry + pad.height, pad.width - 4, 3);
+
+    let baseColor = '#15803d';
+    let lightColor = '#22c55e';
+    let darkColor = '#0d5c2b';
+
+    if (pad.type === 'moving') {
+        baseColor = '#0284c7';
+        lightColor = '#38bdf8';
+        darkColor = '#0369a1';
+    } else if (pad.type === 'broken') {
+        baseColor = '#854d0e';
+        lightColor = '#ca8a04';
+        darkColor = '#533107';
+    }
+
+    ctx.fillStyle = darkColor;
+    ctx.fillRect(rx, ry, pad.width, pad.height);
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(rx + 2, ry + 2, pad.width - 4, pad.height - 4);
+    ctx.fillStyle = lightColor;
+    ctx.fillRect(rx + 4, ry + 2, pad.width - 8, 2);
+
+    if (pad.hasFlower && !pad.hasSpring && !pad.hasTrampoline) {
+        ctx.fillStyle = '#ff4d6d';
+        ctx.fillRect(rx + 6, ry - 5, 6, 6);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(rx + 8, ry - 3, 2, 2);
+    }
+
+    if (pad.type === 'broken') {
+        ctx.fillStyle = '#301802';
+        ctx.fillRect(rx + 12, ry + 2, 2, 8);
+        ctx.fillRect(rx + 22, ry + 4, 2, 6);
+    }
+
+    if (pad.hasSpring) {
+        let springX = rx + pad.springOffsetX;
+        let springY = ry - 16;
+        drawPixelAmanitaSpring(springX, springY, pad.springCompressedTimer > 0);
+    }
+
+    if (pad.hasTrampoline) {
+        let trampX = rx + pad.trampolineOffsetX;
+        let trampY = ry - 18;
+        drawPixelLotusTrampoline(trampX, trampY, pad.trampolineCompressedTimer > 0);
+    }
+
+    if (pad.hasCoin) {
+        drawFrogCoin(rx + pad.width / 2, ry - 14, 14);
+    }
+}
+
+function createPad(y, type = 'normal', forceCoin = false, forceSpring = false, forceTrampoline = false) {
+    const width = 52; 
+    const height = 12;
+    const minX = BANK_WIDTH + 10;
+    const maxX = canvas.width - BANK_WIDTH - width - 10;
+    const x = Math.random() * (maxX - minX) + minX;
+
+    const hasFlower = Math.random() > 0.6 && type !== 'broken';
+
+    const hasTrampoline = !forceCoin && type !== 'broken' && (forceTrampoline || Math.random() < 0.02);
+    const hasSpring = !forceCoin && !hasTrampoline && type !== 'broken' && (forceSpring || Math.random() < 0.08);
+    
+    const springWidth = 26;
+    const springOffsetX = Math.floor((width - springWidth) / 2);
+
+    const trampolineWidth = 34;
+    const trampolineOffsetX = Math.floor((width - trampolineWidth) / 2);
+
+    return { 
+        x, 
+        y, 
+        width, 
+        height, 
+        type, 
+        vx: type === 'moving' ? (Math.random() > 0.5 ? 1.8 : -1.8) : 0, 
+        hasFlower, 
+        broken: false,
+        hasCoin: forceCoin,
+        hasSpring: hasSpring,
+        springOffsetX: springOffsetX,
+        springCompressedTimer: 0,
+        hasTrampoline: hasTrampoline,
+        trampolineOffsetX: trampolineOffsetX,
+        trampolineCompressedTimer: 0
+    };
+}
+
+function initGame() {
+    score = 0;
+    nextCoinScore = 500;
+    nextSpringScore = 800;
+    nextTrampolineScore = 2500;
+    cameraY = 0;
+    gameOver = false;
+    reviveCount = 0;
+    updateReviveButtonUI();
+    scoreEl.innerText = `${t('score')}: 0`;
+    gameOverScreen.classList.remove('active');
+
+    if (document.activeElement) {
+        document.activeElement.blur();
+    }
+
+    platforms = [
+        { x: 160, y: 510, width: 80, height: 14, type: 'normal', vx: 0, hasFlower: true, broken: false, hasCoin: false, hasSpring: false, springOffsetX: 0, springCompressedTimer: 0, hasTrampoline: false, trampolineOffsetX: 0, trampolineCompressedTimer: 0 }
+    ];
+
+    frog.x = 186;
+    frog.y = 484;
+    frog.vx = 0;
+    frog.vy = 0;
+    frog.squashTimer = 0;
+    frog.currentScaleY = 1;
+
+    for (let i = 0; i < 8; i++) {
+        let y = 430 - (i * 70); 
+        let type = 'normal';
+        let r = Math.random();
+        if (i > 2) {
+            if (r < 0.35) type = 'moving';
+            else if (r < 0.50) type = 'broken'; 
+        }
+        platforms.push(createPad(y, type, false, false, false));
+    }
+
+    particles = [];
+    initFireflies();
+
+    isWaitingForSpace = true;
+}
+
+function goToMainMenu() {
+    gameStarted = false;
+    gameOver = false;
+    isPaused = false;
+    isCountingDown = false;
+    pauseOverlay.classList.remove('active');
+    countdownOverlay.classList.remove('active');
+    mainMenu.classList.remove('hidden');
+    gameOverScreen.classList.remove('active');
+    if (pauseCoinTimerInterval) {
+        clearInterval(pauseCoinTimerInterval);
+        pauseCoinTimerInterval = null;
+    }
+}
+
+function openPause() {
+    isPaused = true;
+    pauseTitleEl.innerText = t('pause');
+    pauseResumeBtn.innerText = t('resume');
+
+    const pctx = pauseFrogCanvas.getContext('2d');
+    pctx.imageSmoothingEnabled = false;
+    pctx.clearRect(0, 0, pauseFrogCanvas.width, pauseFrogCanvas.height);
+    pctx.save();
+    const zoom = 1.8;
+    pctx.scale(zoom, zoom);
+    const availSize = pauseFrogCanvas.width / zoom;
+    const fx = (availSize - frog.width) / 2;
+    const fy = (availSize - frog.height) / 2;
+    drawPixelArtFrog(fx, fy, 'right', 0, 0, false, pctx, getCurrentPalette(), true);
+    pctx.restore();
+
+    pauseOverlay.classList.add('active');
+
+    // Показываем и обновляем раз в секунду кнопку "+10 монет за рекламу"
+    updatePauseCoinBtn();
+    if (pauseCoinTimerInterval) clearInterval(pauseCoinTimerInterval);
+    pauseCoinTimerInterval = setInterval(updatePauseCoinBtn, 1000);
+}
+
+function closePause() {
+    pauseOverlay.classList.remove('active');
+    if (pauseCoinTimerInterval) {
+        clearInterval(pauseCoinTimerInterval);
+        pauseCoinTimerInterval = null;
+    }
+}
+
+// Общая анимация "3... 2... 1... JUMP!" — используется и при снятии с
+// паузы, и при возрождении по рекламе. onComplete вызывается сразу после
+// того, как оверлей спрятан и isCountingDown снова false (т.е. физика/
+// управление уже разблокированы).
+function runCountdownAnimation(onComplete) {
+    isCountingDown = true;
+    countdownOverlay.classList.add('active');
+    const steps = ['3', '2', '1', t('jumpExclaim')];
+    let i = 0;
+
+    function showStep() {
+        countdownTextEl.innerText = steps[i];
+        countdownTextEl.style.animation = 'none';
+        void countdownTextEl.offsetWidth;
+        countdownTextEl.style.animation = '';
+        i++;
+        if (i < steps.length) {
+            setTimeout(showStep, 700);
+        } else {
+            setTimeout(() => {
+                countdownOverlay.classList.remove('active');
+                isCountingDown = false;
+                onComplete();
+            }, 700);
+        }
+    }
+    showStep();
+}
+
+function startCountdown() {
+    closePause();
+    runCountdownAnimation(() => { isPaused = false; });
+}
+
+pauseResumeBtn.addEventListener('click', () => { startCountdown(); });
+
+function launchFrog() {
+    if (isWaitingForSpace) {
+        isWaitingForSpace = false;
+        frog.vy = frog.jumpForce;
+        playJumpSound();
+    }
+}
+
+function update() {
+    if (gameOver || !gameStarted || shopOpen || isPaused || isCountingDown || adPlaying) return;
+
+    platforms.forEach(pad => {
+        if (pad.type === 'moving') {
+            pad.x += pad.vx;
+            if (pad.x <= BANK_WIDTH + 5 || pad.x + pad.width >= canvas.width - BANK_WIDTH - 5) {
+                pad.vx *= -1;
+            }
+        }
+        if (pad.springCompressedTimer > 0) pad.springCompressedTimer--;
+        if (pad.trampolineCompressedTimer > 0) pad.trampolineCompressedTimer--;
+    });
+
+    if (isWaitingForSpace) return;
+
+    if (keys.left) {
+        frog.vx -= frog.speed;
+        frog.facing = 'left';
+    }
+    if (keys.right) {
+        frog.vx += frog.speed;
+        frog.facing = 'right';
+    }
+
+    frog.vx *= frog.friction;
+    frog.x += frog.vx;
+    frog.vy += frog.gravity;
+    frog.y += frog.vy;
+
+    if (frog.squashTimer > 0) frog.squashTimer--;
+
+    if (frog.x < BANK_WIDTH) {
+        frog.x = BANK_WIDTH;
+        frog.vx = 0;
+    }
+    if (frog.x + frog.width > canvas.width - BANK_WIDTH) {
+        frog.x = canvas.width - BANK_WIDTH - frog.width;
+        frog.vx = 0;
+    }
+
+    if (frog.y - cameraY < 250) {
+        let diff = 250 - (frog.y - cameraY);
+        cameraY -= diff;
+        score += Math.floor(diff);
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('frog_jump_high', highScore);
+            highScoreEl.innerText = `${t('best')}: ${highScore}`;
+        }
+        scoreEl.innerText = `${t('score')}: ${score}`;
+    }
+
+    let topPadY = platforms.reduce((min, p) => p.y < min ? p.y : min, canvas.height);
+    if (topPadY - cameraY > -50) {
+        let newY = topPadY - (Math.random() * 30 + 65);
+        let type = 'normal';
+        let r = Math.random();
+        if (r < 0.4) type = 'moving';
+        else if (r < 0.65) type = 'broken';
+
+        let shouldHaveCoin = false;
+        if (score >= nextCoinScore && type !== 'broken') {
+            shouldHaveCoin = true;
+            nextCoinScore += 500;
+        }
+
+        let shouldHaveTrampoline = false;
+        if (score >= nextTrampolineScore && type !== 'broken' && !shouldHaveCoin) {
+            shouldHaveTrampoline = true;
+            nextTrampolineScore += 2500;
+        }
+
+        let shouldHaveSpring = false;
+        if (score >= nextSpringScore && type !== 'broken' && !shouldHaveCoin && !shouldHaveTrampoline) {
+            shouldHaveSpring = true;
+            nextSpringScore += 800;
+        }
+
+        platforms.push(createPad(newY, type, shouldHaveCoin, shouldHaveSpring, shouldHaveTrampoline));
+    }
+
+    platforms.forEach(pad => {
+        if (pad.hasCoin) {
+            let coinX = pad.x + pad.width / 2;
+            let coinY = pad.y - 14;
+            let dist = Math.hypot((frog.x + frog.width / 2) - coinX, (frog.y + frog.height / 2) - coinY);
+
+            if (dist < 22) {
+                pad.hasCoin = false;
+                coins++;
+                localStorage.setItem('frog_coins', coins);
+                playCoinSound();
+
+                for (let i = 0; i < 8; i++) {
+                    particles.push({
+                        x: coinX,
+                        y: coinY,
+                        vx: (Math.random() - 0.5) * 3.5,
+                        vy: -Math.random() * 3.5,
+                        size: 3,
+                        color: '#fbbf24',
+                        life: 14
+                    });
+                }
+            }
+        }
+
+        if (frog.vy > 0 && 
+            frog.x + frog.width - 6 > pad.x && 
+            frog.x + 6 < pad.x + pad.width &&
+            frog.y + frog.height >= pad.y &&
+            frog.y + frog.height <= pad.y + pad.height + 6) {
+
+            if (!pad.broken) {
+                let hitTrampoline = false;
+                let hitSpring = false;
+
+                if (pad.hasTrampoline) {
+                    let trX = pad.x + pad.trampolineOffsetX;
+                    let trW = 34;
+                    if (frog.x + frog.width > trX && frog.x < trX + trW) {
+                        hitTrampoline = true;
+                    }
+                } else if (pad.hasSpring) {
+                    let spX = pad.x + pad.springOffsetX;
+                    let spW = 26;
+                    if (frog.x + frog.width > spX && frog.x < spX + spW) {
+                        hitSpring = true;
+                    }
+                }
+
+                if (hitTrampoline) {
+                    frog.vy = frog.trampolineForce;
+                    pad.trampolineCompressedTimer = 12;
+                    playTrampolineSound();
+
+                    // Лепестковые пыльцевые частицы при супер-прыжке
+                    for (let i = 0; i < 18; i++) {
+                        particles.push({
+                            x: frog.x + frog.width / 2,
+                            y: frog.y + frog.height,
+                            vx: (Math.random() - 0.5) * 8,
+                            vy: -Math.random() * 7,
+                            size: Math.random() * 4 + 2,
+                            color: Math.random() > 0.5 ? '#f472b6' : '#fef08a',
+                            life: 26
+                        });
+                    }
+                } else if (hitSpring) {
+                    frog.vy = frog.springForce;
+                    pad.springCompressedTimer = 10;
+                    playSpringSound();
+
+                    for (let i = 0; i < 12; i++) {
+                        particles.push({
+                            x: frog.x + frog.width / 2,
+                            y: frog.y + frog.height,
+                            vx: (Math.random() - 0.5) * 6,
+                            vy: -Math.random() * 5,
+                            size: Math.random() * 4 + 2,
+                            color: Math.random() > 0.4 ? '#dc2626' : '#ffffff',
+                            life: 20
+                        });
+                    }
+                } else {
+                    frog.vy = frog.jumpForce;
+                    if (pad.type === 'broken') {
+                        pad.broken = true;
+                        playBreakSound();
+                    } else {
+                        playJumpSound();
+                    }
+
+                    let landPalette = getCurrentPalette();
+                    for (let i = 0; i < 10; i++) {
+                        particles.push({
+                            x: frog.x + frog.width / 2,
+                            y: frog.y + frog.height,
+                            vx: (Math.random() - 0.5) * 4.5,
+                            vy: -Math.random() * 3.5,
+                            size: Math.random() * 4 + 2.5,
+                            color: Math.random() > 0.5 ? landPalette.bodyOuter : landPalette.bodyInner,
+                            life: 18
+                        });
+                    }
+                }
+
+                frog.squashTimer = 6;
+            }
+        }
+    });
+
+    platforms = platforms.filter(p => p.y - cameraY < canvas.height + 50);
+
+    fireflies.forEach(f => {
+        f.x += f.speedX;
+        f.y += f.speedY;
+        f.pulse += 0.05;
+
+        if (f.x < 0) f.x = BANK_WIDTH - 10;
+        if (f.x > BANK_WIDTH && f.x < canvas.width - BANK_WIDTH) f.x = canvas.width - 10;
+        if (f.y < 0) f.y = canvas.height;
+        if (f.y > canvas.height) f.y = 0;
+    });
+
+    particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+    });
+    particles = particles.filter(p => p.life > 0);
+
+    if (frog.y - cameraY > canvas.height + 40) {
+        gameOver = true;
+        playFallSound();
+        finalScoreEl.innerText = `${t('score')}: ${score}`;
+        gameOverScreen.classList.add('active');
+        updateReviveButtonUI();
+        // Интерстишл-реклама здесь НЕ показывается: экран смерти сам по
+        // себе не триггерит рекламу, даже если кулдаун уже истёк.
+        // Показ (если кулдаун истёк) происходит только по клику на
+        // RESTART — см. restartBtn.addEventListener ниже.
+    }
+}
+
+function drawRoundedBox(x, y, w, h, bg = '#fde68a', border = '#78350f') {
+    ctx.save();
+    ctx.fillStyle = border;
+    ctx.fillRect(x + 3, y, w - 6, h);
+    ctx.fillRect(x, y + 3, w, h - 6);
+    ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(x + 3, y + 3, w - 6, h - 6);
+    ctx.restore();
+}
+
+function drawSideUI() {
+    if (!gameStarted) return;
+
+    drawRoundedBox(exitBtnRect.x, exitBtnRect.y, exitBtnRect.width, exitBtnRect.height);
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(exitBtnRect.x + 11, exitBtnRect.y + 8, 14, 22);
+    ctx.fillStyle = '#fde68a';
+    ctx.fillRect(exitBtnRect.x + 13, exitBtnRect.y + 10, 10, 18);
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(exitBtnRect.x + 15, exitBtnRect.y + 12, 6, 14);
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(exitBtnRect.x + 18, exitBtnRect.y + 17, 12, 4);
+    ctx.fillRect(exitBtnRect.x + 26, exitBtnRect.y + 14, 3, 10);
+    ctx.fillRect(exitBtnRect.x + 29, exitBtnRect.y + 16, 2, 6);
+
+    const coinBoxY = exitBtnRect.y + exitBtnRect.height + 8;
+    const coinBoxW = 46;
+    const coinBoxH = 26;
+    drawRoundedBox(exitBtnRect.x, coinBoxY, coinBoxW, coinBoxH);
+    drawFrogCoin(exitBtnRect.x + 11, coinBoxY + 13, 12);
+
+    ctx.fillStyle = '#451a03';
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${coins}`, exitBtnRect.x + 20, coinBoxY + 16);
+
+    const sx = shopBtnRect.x;
+    const sy = shopBtnRect.y;
+    drawRoundedBox(sx, sy, shopBtnRect.width, shopBtnRect.height);
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.scale(0.85, 0.85);
+    ctx.translate(5, 5);
+
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(3, 18, 38, 20);
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(5, 20, 34, 16);
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(5, 20, 3, 16);
+    ctx.fillStyle = '#eab308';
+    ctx.fillRect(5, 34, 34, 2);
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(8, 22, 9, 14);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(9, 23, 7, 13);
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(10, 24, 5, 11);
+    ctx.fillStyle = '#ecfeff';
+    ctx.fillRect(10, 24, 2, 11);
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(10, 29, 2, 3);
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(20, 22, 17, 12);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(21, 23, 15, 10);
+    ctx.fillStyle = '#ca8a04';
+    ctx.fillRect(21, 23, 15, 2);
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(20, 32, 17, 2);
+    ctx.fillStyle = '#eab308';
+    ctx.fillRect(20, 33, 17, 1);
+    const roofY = 2;
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(1, roofY + 2, 42, 18);
+    const stripes = [
+        { type: 'red', x: 3, w: 7 }, { type: 'white', x: 10, w: 7 },
+        { type: 'red', x: 17, w: 7 }, { type: 'white', x: 24, w: 7 },
+        { type: 'red', x: 31, w: 7 }, { type: 'white', x: 38, w: 3 }
+    ];
+    stripes.forEach(s => {
+        ctx.fillStyle = (s.type === 'red') ? '#dc2626' : '#fef3c7';
+        ctx.fillRect(s.x, roofY + 4, s.w, 13);
+        ctx.fillStyle = (s.type === 'red') ? '#f87171' : '#ffffff';
+        ctx.fillRect(s.x, roofY + 4, s.w, 2);
+        ctx.fillStyle = (s.type === 'red') ? '#991b1b' : '#fde047';
+        ctx.fillRect(s.x, roofY + 15, s.w, 2);
+    });
+    ctx.fillStyle = '#111827';
+    for (let i = 0; i < 5; i++) {
+        ctx.fillRect(4 + i * 7, roofY + 17, 5, 2);
+    }
+    ctx.restore();
+
+    const px = pauseBtnRect.x;
+    const py = pauseBtnRect.y;
+    drawRoundedBox(px, py, pauseBtnRect.width, pauseBtnRect.height, '#334155', '#0f172a');
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(px + 14, py + 10, 6, 20);
+    ctx.fillRect(px + 24, py + 10, 6, 20);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(px + 14, py + 10, 2, 20);
+    ctx.fillRect(px + 24, py + 10, 2, 20);
+}
+
+function drawTree(x, y) {
+    ctx.fillStyle = '#4a2810';
+    ctx.fillRect(x + 12, y + 26, 8, 18);
+    ctx.fillStyle = '#2d1808';
+    ctx.fillRect(x + 17, y + 26, 3, 18);
+
+    ctx.fillStyle = '#1e5e27';
+    ctx.fillRect(x + 2, y + 10, 28, 18);
+    ctx.fillRect(x + 6, y + 2, 20, 22);
+
+    ctx.fillStyle = '#2e8b39';
+    ctx.fillRect(x + 4, y + 8, 20, 14);
+    ctx.fillRect(x + 8, y + 4, 12, 18);
+
+    ctx.fillStyle = '#4ade80';
+    ctx.fillRect(x + 6, y + 6, 6, 4);
+    ctx.fillRect(x + 10, y + 10, 4, 4);
+}
+
+function drawBush(x, y) {
+    ctx.fillStyle = '#166534';
+    ctx.fillRect(x, y + 6, 22, 12);
+    ctx.fillRect(x + 3, y + 2, 16, 16);
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(x + 2, y + 4, 14, 10);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(x + 4, y + 6, 3, 3);
+    ctx.fillRect(x + 14, y + 9, 3, 3);
+}
+
+function drawRock(x, y) {
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(x, y + 4, 14, 8);
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(x + 2, y + 2, 10, 6);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(x + 3, y + 3, 4, 2);
+}
+
+function renderBackground() {
+    ctx.fillStyle = '#0284c7';
+    ctx.fillRect(BANK_WIDTH, 0, canvas.width - BANK_WIDTH * 2, canvas.height);
+
+    const time = Date.now() * 0.002;
+    const sectorWater = 70;
+    const startW = Math.floor((cameraY - 100) / sectorWater);
+    const endW = Math.floor((cameraY + canvas.height + 100) / sectorWater);
+
+    for (let w = startW; w <= endW; w++) {
+        let wy = w * sectorWater - cameraY;
+        let rx1 = pseudoRandom(w * 11.1) * (canvas.width - BANK_WIDTH * 2 - 50) + BANK_WIDTH + 10;
+        let rx2 = pseudoRandom(w * 22.2) * (canvas.width - BANK_WIDTH * 2 - 50) + BANK_WIDTH + 10;
+        let waveShift = Math.sin(time + w) * 5;
+
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(rx1 + waveShift, wy + 15, 30, 3);
+        ctx.fillRect(rx1 + waveShift + 4, wy + 18, 18, 2);
+        ctx.fillStyle = '#7dd3fc';
+        ctx.fillRect(rx2 - waveShift, wy + 45, 22, 2);
+
+        if (gameStarted && pseudoRandom(w * 33.3) < 0.35) {
+            let padX = BANK_WIDTH + 15 + pseudoRandom(w * 44.4) * (canvas.width - BANK_WIDTH * 2 - 30);
+            ctx.fillStyle = '#15803d';
+            ctx.fillRect(padX, wy + 25, 12, 8);
+            ctx.fillStyle = '#22c55e';
+            ctx.fillRect(padX + 2, wy + 26, 8, 6);
+        }
+    }
+
+    ctx.fillStyle = '#1e3a1e';
+    ctx.fillRect(0, 0, BANK_WIDTH, canvas.height);
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(0, 0, BANK_WIDTH - 8, canvas.height);
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(0, 0, BANK_WIDTH - 18, canvas.height);
+
+    ctx.fillStyle = '#1e3a1e';
+    ctx.fillRect(canvas.width - BANK_WIDTH, 0, BANK_WIDTH, canvas.height);
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(canvas.width - BANK_WIDTH + 8, 0, BANK_WIDTH - 8, canvas.height);
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(canvas.width - BANK_WIDTH + 18, 0, BANK_WIDTH - 18, canvas.height);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.fillRect(BANK_WIDTH, 0, 3, canvas.height);
+    ctx.fillRect(canvas.width - BANK_WIDTH - 3, 0, 3, canvas.height);
+
+    const stepY = 90;
+    const startSector = Math.floor((cameraY - 100) / stepY);
+    const endSector = Math.floor((cameraY + canvas.height + 100) / stepY);
+
+    for (let s = startSector; s <= endSector; s++) {
+        let screenY = s * stepY - cameraY;
+        let randL = pseudoRandom(s * 14.21);
+        let randR = pseudoRandom(s * 67.89);
+
+        if (randL < 0.4) drawTree(12, screenY);
+        else if (randL < 0.7) drawBush(16, screenY + 10);
+        else if (randL < 0.9) drawRock(20, screenY + 12);
+
+        if (randR < 0.4) drawTree(canvas.width - 44, screenY);
+        else if (randR < 0.7) drawBush(canvas.width - 38, screenY + 10);
+        else if (randR < 0.9) drawRock(canvas.width - 34, screenY + 12);
+    }
+
+    fireflies.forEach(f => {
+        let alpha = (Math.sin(f.pulse) + 1) / 2 * 0.8 + 0.2;
+        ctx.fillStyle = `rgba(253, 224, 71, ${alpha})`;
+        ctx.fillRect(Math.round(f.x), Math.round(f.y), f.size, f.size);
+    });
+}
+
+function renderMenuScene() {
+    renderBackground();
+
+    const padX = 145;
+    const padY = 280;
+    const padW = 110;
+    const padH = 26;
+
+    ctx.fillStyle = 'rgba(0, 20, 40, 0.4)';
+    ctx.fillRect(padX + 4, padY + padH - 4, padW - 8, 8);
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(padX, padY, padW, padH);
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(padX + 4, padY + 3, padW - 8, padH - 6);
+    ctx.fillStyle = '#4ade80';
+    ctx.fillRect(padX + 8, padY + 3, padW - 16, 4);
+
+    ctx.fillStyle = '#ff4d6d';
+    ctx.fillRect(padX + 12, padY - 8, 12, 12);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(padX + 16, padY - 4, 4, 4);
+    ctx.fillStyle = '#ff4d6d';
+    ctx.fillRect(padX + padW - 24, padY - 6, 10, 10);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(padX + padW - 20, padY - 3, 2, 2);
+
+    drawPixelArtFrog(186, padY - 26, 'right', 0, 0, true);
+}
+
+function render() {
+    if (!gameStarted) {
+        renderMenuScene();
+        return;
+    }
+
+    renderBackground();
+    platforms.forEach(drawPixelPad);
+
+    particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(Math.round(p.x), Math.round(p.y - cameraY), p.size, p.size);
+    });
+
+    drawPixelArtFrog(frog.x, frog.y - cameraY, frog.facing, frog.vy, frog.squashTimer);
+
+    if (isWaitingForSpace) {
+        ctx.save();
+        ctx.font = '10px "Press Start 2P", monospace';
+        ctx.textAlign = 'center';
+        const textX = canvas.width / 2;
+        const textY = (frog.y - cameraY) - 35;
+        const alpha = (Math.sin(Date.now() * 0.005) + 1) / 2 * 0.75 + 0.25;
+        const startPromptText = isMobileDevice ? t('tapToStart') : t('pressSpace');
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillText(startPromptText, textX + 2, textY + 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.fillText(startPromptText, textX, textY);
+        ctx.restore();
+    }
+
+    drawSideUI();
+}
+
+function loop() {
+    update();
+    render();
+    requestAnimationFrame(loop);
+}
+
+function startGame() {
+    initAudio();
+    if (!gameStarted) {
+        gameStarted = true;
+        mainMenu.classList.add('hidden');
+        initGame();
+    }
+}
+
+canvas.addEventListener('click', (e) => {
+    if (!gameStarted || shopOpen || isPaused || isCountingDown || adPlaying) return;
+    const rect = canvas.getBoundingClientRect();
+    const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    if (clickX >= exitBtnRect.x && clickX <= exitBtnRect.x + exitBtnRect.width &&
+        clickY >= exitBtnRect.y && clickY <= exitBtnRect.y + exitBtnRect.height) {
+        goToMainMenu();
+        return;
+    }
+    if (clickX >= shopBtnRect.x && clickX <= shopBtnRect.x + shopBtnRect.width &&
+        clickY >= shopBtnRect.y && clickY <= shopBtnRect.y + shopBtnRect.height) {
+        openShop();
+        return;
+    }
+    if (clickX >= pauseBtnRect.x && clickX <= pauseBtnRect.x + pauseBtnRect.width &&
+        clickY >= pauseBtnRect.y && clickY <= pauseBtnRect.y + pauseBtnRect.height) {
+        openPause();
+    }
+});
+
+// ==================== СЕНСОРНОЕ УПРАВЛЕНИЕ (мобильные) ====================
+// Не свайпы, а "зажал — потянул": палец опускается на экран, эта точка
+// становится "центром", и пока палец удерживается, отклонение текущей
+// позиции пальца от центра влево/вправо задаёт направление (как
+// невидимый джойстик). Отпустил — движение сразу останавливается.
+// Иконки exit/shop/pause по-прежнему тапаются как обычно: если палец
+// опустился прямо на них, джойстик не активируется и срабатывает
+// обычный 'click' выше.
+let touchSteerActive = false;
+let touchAnchorX = 0;
+const TOUCH_STEER_DEADZONE = 8; // px в системе координат канваса — небольшая "мёртвая зона" от дрожания пальца
+
+function toCanvasX(clientX) {
+    const rect = canvas.getBoundingClientRect();
+    return (clientX - rect.left) * (canvas.width / rect.width);
+}
+function toCanvasY(clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return (clientY - rect.top) * (canvas.height / rect.height);
+}
+function isOverCanvasUiButton(clientX, clientY) {
+    const cx = toCanvasX(clientX);
+    const cy = toCanvasY(clientY);
+    return [exitBtnRect, shopBtnRect, pauseBtnRect].some(r =>
+        cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height
+    );
+}
+
+function stopTouchSteering() {
+    touchSteerActive = false;
+    keys.left = false;
+    keys.right = false;
+}
+
+canvas.addEventListener('touchstart', (e) => {
+    initAudio();
+    const touch = e.touches[0];
+    if (!touch) return;
+    if (adPlaying) return;
+    // Палец попал на иконку exit/shop/pause — не мешаем обычному тапу.
+    if (isOverCanvasUiButton(touch.clientX, touch.clientY)) return;
+    if (!gameStarted || shopOpen || isPaused || isCountingDown) return;
+    touchSteerActive = true;
+    touchAnchorX = toCanvasX(touch.clientX);
+    keys.left = false;
+    keys.right = false;
+    // Первый прыжок (после старта игры/возрождения) — по тапу, а не по
+    // пробелу, которого на телефоне просто нет.
+    if (isWaitingForSpace) launchFrog();
+}, { passive: true });
+
+canvas.addEventListener('touchmove', (e) => {
+    if (!touchSteerActive) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const delta = toCanvasX(touch.clientX) - touchAnchorX;
+    if (delta < -TOUCH_STEER_DEADZONE) {
+        keys.left = true;
+        keys.right = false;
+    } else if (delta > TOUCH_STEER_DEADZONE) {
+        keys.right = true;
+        keys.left = false;
+    } else {
+        keys.left = false;
+        keys.right = false;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', stopTouchSteering, { passive: true });
+canvas.addEventListener('touchcancel', stopTouchSteering, { passive: true });
+
+shopBackBtn.addEventListener('click', () => { closeShop(); });
+confirmYesBtn.addEventListener('click', () => { confirmPurchase(); });
+confirmNoBtn.addEventListener('click', () => { closeConfirmModal(); });
+
+document.body.addEventListener('pointerdown', () => { initAudio(); }, { once: true });
+
+playBtn.addEventListener('click', startGame);
+
+musicBtn.addEventListener('click', () => {
+    initAudio();
+    isMusicEnabled = !isMusicEnabled;
+    if (isMusicEnabled) {
+        musicBtn.innerText = t('musicOn');
+        musicBtn.classList.remove('off');
+        startBgMusic();
+    } else {
+        musicBtn.innerText = t('musicOff');
+        musicBtn.classList.add('off');
+        stopBgMusic();
+    }
+});
+
+window.addEventListener('keydown', (e) => {
+    initAudio();
+    if (adPlaying) return;
+    if (shopOpen) {
+        if (e.key === 'Escape') {
+            if (pendingPurchaseSkin) closeConfirmModal();
+            else closeShop();
+        }
+        return;
+    }
+    if (isPaused) {
+        if (e.key === 'Escape') { startCountdown(); }
+        return;
+    }
+    if (isCountingDown) return;
+    if (e.code === 'Space') { e.preventDefault(); launchFrog(); }
+    // e.code завязан на физическое положение клавиши, а не на раскладку —
+    // поэтому A/D работают даже если выбрана русская/другая раскладка.
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+});
+
+window.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+});
+
+restartBtn.addEventListener('click', () => {
+    // Если 2.5 минуты с прошлой рекламы уже прошли — показываем
+    // интерстишл ПЕРЕД рестартом; если нет — рестарт мгновенный.
+    tryShowInterstitialAd(() => { initGame(); });
+});
+
+initFireflies();
+applyLanguage();
+updateReviveButtonUI();
+loop();
+</script>
+</body>
+</html>
