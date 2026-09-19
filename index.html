@@ -2148,6 +2148,9 @@ function initGame() {
     initFireflies();
 
     isWaitingForSpace = true;
+    // Каждая новая жизнь калибрует "нейтральный" наклон заново — под то,
+    // как игрок держит телефон именно сейчас (см. handleDeviceOrientation).
+    tiltBaseGamma = null;
 }
 
 function goToMainMenu() {
@@ -2759,6 +2762,7 @@ function loop() {
 
 function startGame() {
     initAudio();
+    requestTiltPermission();
     if (!gameStarted) {
         gameStarted = true;
         mainMenu.classList.add('hidden');
@@ -2787,26 +2791,96 @@ canvas.addEventListener('click', (e) => {
     }
 });
 
-// ==================== СЕНСОРНОЕ УПРАВЛЕНИЕ (мобильные / мини-аппы) ====================
-// Не свайпы, а "зажал — потянул": палец/указатель опускается на экран, эта
-// точка становится "центром", и пока он удерживается, отклонение текущей
-// позиции от центра влево/вправо задаёт направление (как невидимый
-// джойстик). Отпустил — движение сразу останавливается.
+// ==================== УПРАВЛЕНИЕ НАКЛОНОМ ТЕЛЕФОНА ====================
+// Вместо "зажал и потянул пальцем" — жабка едет туда, куда наклонён
+// телефон. При старте каждой жизни (initGame) считываем текущий наклон
+// как "нейтральный ноль" (tiltBaseGamma) — так игроку не нужно держать
+// телефон строго вертикально, можно наклонять под удобным углом, и
+// отклонение ОТ этого угла в любую сторону будет двигать жабку.
 //
-// Используем Pointer Events (pointerdown/move/up), а НЕ чистые touch-
-// события: во многих встроенных WebView мини-приложений (Telegram, VK
-// и т.п.) touchstart/touchmove либо не долетают вообще, либо приходят с
-// квирками, тогда как pointerdown/move/up там работают стабильно и заодно
-// одним и тем же кодом покрывают палец, мышь и стилус — то есть "тап"
-// срабатывает и в мини-аппе, и в обычном мобильном браузере, и на ПК.
+// event.gamma — наклон влево/вправо (roll) в градусах, то, что нужно,
+// когда телефон держат в портретной ориентации. Если наклонить телефон
+// влево — gamma уменьшается, если вправо — увеличивается.
 //
-// Иконки exit/shop/pause по-прежнему тапаются как обычно: если указатель
-// опустился прямо на них, джойстик не активируется и срабатывает
-// обычный 'click' выше.
+// На iOS 13+ доступ к датчику требует разрешения, которое можно
+// запросить только по прямому жесту пользователя — делаем это по тапу
+// на кнопку PLAY (см. requestTiltPermission в startGame).
+//
+// Если датчик недоступен/запрещён (или это мини-апп, который его не
+// прокидывает) — автоматически откатываемся на старое управление
+// "зажал — потянул пальцем", чтобы игра в любом случае была играбельна.
+let tiltEnabled = false;
+let tiltPermissionRequested = false;
+let tiltBaseGamma = null;
+let tiltFallbackTimer = null;
+const TILT_DEADZONE_DEG = 4; // градусов от калибровки, прежде чем считаем это наклоном
+
+function handleDeviceOrientation(e) {
+    if (e.gamma === null || e.gamma === undefined) return;
+    if (tiltFallbackTimer) { clearTimeout(tiltFallbackTimer); tiltFallbackTimer = null; }
+    tiltEnabled = true;
+
+    if (tiltBaseGamma === null) tiltBaseGamma = e.gamma; // калибровка "нейтрального" наклона
+
+    if (!gameStarted || shopOpen || isPaused || isCountingDown || adPlaying || isWaitingForSpace) {
+        keys.left = false;
+        keys.right = false;
+        return;
+    }
+
+    const delta = e.gamma - tiltBaseGamma;
+    if (delta < -TILT_DEADZONE_DEG) {
+        keys.left = true;
+        keys.right = false;
+    } else if (delta > TILT_DEADZONE_DEG) {
+        keys.right = true;
+        keys.left = false;
+    } else {
+        keys.left = false;
+        keys.right = false;
+    }
+}
+
+function enableTiltFallback() {
+    // Датчик не прислал ни одного события за разумное время — считаем,
+    // что наклон недоступен (запрещён/не поддерживается/зарезан мини-
+    // аппом), и включаем управление пальцем как запасной вариант.
+    if (tiltEnabled) return;
+    tiltEnabled = false;
+    touchDragFallback = true;
+}
+
+function requestTiltPermission() {
+    if (tiltPermissionRequested) return;
+    tiltPermissionRequested = true;
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS 13+ — нужен явный пользовательский жест и подтверждение
+        DeviceOrientationEvent.requestPermission().then((state) => {
+            if (state === 'granted') {
+                window.addEventListener('deviceorientation', handleDeviceOrientation);
+                tiltFallbackTimer = setTimeout(enableTiltFallback, 1200);
+            } else {
+                touchDragFallback = true;
+            }
+        }).catch(() => { touchDragFallback = true; });
+    } else if (window.DeviceOrientationEvent) {
+        // Android и старые iOS — разрешение не требуется
+        window.addEventListener('deviceorientation', handleDeviceOrientation);
+        tiltFallbackTimer = setTimeout(enableTiltFallback, 1200);
+    } else {
+        // Датчик вообще не поддерживается этим браузером/устройством
+        touchDragFallback = true;
+    }
+}
+
+// ==================== ЗАПАСНОЕ УПРАВЛЕНИЕ ПАЛЬЦЕМ ====================
+// Включается только если наклон недоступен (см. выше). Логика та же,
+// что была раньше: "зажал — потянул" от точки касания.
+let touchDragFallback = false;
 let touchSteerActive = false;
 let touchAnchorX = 0;
 let activePointerId = null;
-const TOUCH_STEER_DEADZONE = 8; // px в системе координат канваса — небольшая "мёртвая зона" от дрожания пальца
+const TOUCH_STEER_DEADZONE = 8;
 
 function toCanvasX(clientX) {
     const rect = canvas.getBoundingClientRect();
@@ -2827,27 +2901,33 @@ function isOverCanvasUiButton(clientX, clientY) {
 function stopTouchSteering() {
     touchSteerActive = false;
     activePointerId = null;
-    keys.left = false;
-    keys.right = false;
+    if (!tiltEnabled) {
+        keys.left = false;
+        keys.right = false;
+    }
 }
 
 canvas.addEventListener('pointerdown', (e) => {
     initAudio();
+    requestTiltPermission();
     if (adPlaying) return;
     // Указатель попал на иконку exit/shop/pause — не мешаем обычному тапу.
     if (isOverCanvasUiButton(e.clientX, e.clientY)) return;
     if (!gameStarted || shopOpen || isPaused || isCountingDown) return;
-    activePointerId = e.pointerId;
-    touchSteerActive = true;
-    touchAnchorX = toCanvasX(e.clientX);
-    keys.left = false;
-    keys.right = false;
-    // Первый прыжок (после старта игры/возрождения) — по тапу, а не по
-    // пробелу, которого на телефоне просто нет.
+    if (touchDragFallback) {
+        activePointerId = e.pointerId;
+        touchSteerActive = true;
+        touchAnchorX = toCanvasX(e.clientX);
+        keys.left = false;
+        keys.right = false;
+    }
+    // Тап запускает прыжок (после старта игры/возрождения) — и при
+    // наклоне, и при запасном пальцевом управлении.
     if (isWaitingForSpace) launchFrog();
 });
 
 canvas.addEventListener('pointermove', (e) => {
+    if (!touchDragFallback || tiltEnabled) return; // наклон активен — драг не нужен
     if (!touchSteerActive || e.pointerId !== activePointerId) return;
     if (e.cancelable) e.preventDefault();
     const delta = toCanvasX(e.clientX) - touchAnchorX;
